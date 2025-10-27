@@ -71,7 +71,7 @@ public class SecurityConfiguration {
                                 "/swagger-ui.html",
                                 "/swagger-resources/**",
                                 "/webjars/**",
-                                "/api/auth/login")
+                                "/transport-service/auth/login")
                         .permitAll()
                         .requestMatchers("/payments/**").hasAnyRole("ADMIN", "ACCOUNTANT")
                         .anyRequest()
