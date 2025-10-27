@@ -6,7 +6,7 @@ const detectDefaultBaseUrl = () => {
     if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
       return 'http://localhost:8080/transport-service';
     }
-    return origin;
+    return origin + '/transport-service';   ;
   }
   return 'http://localhost:8080/transport-service';
 };
