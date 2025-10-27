@@ -3,11 +3,11 @@ const detectDefaultBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { origin } = window.location;
     if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
-      return 'http://localhost:8080';
+      return 'http://localhost:8080/api';
     }
-    return origin;
+    return `${origin}/api`;
   }
-  return 'http://localhost:8080';
+  return 'http://localhost:8080/api';
 };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl();
