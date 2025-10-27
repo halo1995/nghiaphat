@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: transport-service
+    code: ${APPLICATION_CODE:001}
+  cloud:
+    compatibility-verifier:
+      enabled: false
+  compression:
+    enabled: true
+  error:
+    whitelabel:
+      enabled: false
+  profiles:
+    active: ${PROFILE_NAME:dev}
+  sleuth:
+    sampler:
+      probability: 100
+  jackson:
+    default-property-inclusion: always
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:123456}
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+jwt:
+  secret: ${JWT_SECRET:GeCK9gAKzii51PHdlxBv7XRvYWYvyxn4DECYEEwmBYE=}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+springdoc:
+  api-docs:
+    enabled: ${API_ENABLED:true}
+  swagger-ui:
+    path: index.html
+    enabled: true
+    config-url: ${SWAGGER_CONFIG_URL:/v3/api-docs/swagger-config}
+    disable-swagger-default-url: true
+    url: ${SWAGGER_UI_URL:/v3/api-docs}
+
+server:
+  tomcat:
+    threads:
+      max: ${REQUEST_MAX_THREAD:2500}

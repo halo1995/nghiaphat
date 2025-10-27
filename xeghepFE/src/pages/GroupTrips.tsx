@@ -1,0 +1,783 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import type { TripGroup, Trip } from '@/data/trips';
+import { getTripGroups, getTrips, updateTrip, updateTripGroup, deleteTripGroup } from '@/data/trips';
+import type { Driver } from '@/data/drivers';
+import { getDrivers } from '@/data/drivers';
+import type { Vehicle } from '@/data/vehicles';
+import { getVehicles } from '@/data/vehicles';
+import { Truck, Users, DollarSign, ArrowRight, GitMerge, Pencil, Loader2, AlertTriangle, Calendar } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { DatePickerField } from '@/components/ui/date-picker-field';
+
+const getTodayLocalDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
+const GroupTrips = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
+    queryKey: ['tripGroups'],
+    queryFn: getTripGroups,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const { data: trips = [] } = useQuery<Trip[]>({
+    queryKey: ['trips'],
+    queryFn: getTrips,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const { data: drivers = [] } = useQuery<Driver[]>({
+    queryKey: ['drivers'],
+    queryFn: getDrivers,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const { data: vehicles = [] } = useQuery<Vehicle[]>({
+    queryKey: ['vehicles'],
+    queryFn: getVehicles,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const [editingGroup, setEditingGroup] = useState<TripGroup | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState('none');
+  const [selectedDriverId, setSelectedDriverId] = useState('none');
+  const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const availableTrips = useMemo(() => {
+    if (!editingGroup) return [] as Trip[];
+    return trips.filter((trip: Trip) => {
+      if (trip.groupId === editingGroup.id) {
+        return true;
+      }
+      return !trip.groupId && !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
+    });
+  }, [editingGroup, trips]);
+
+  const availableVehicles = useMemo<Vehicle[]>(() => vehicles, [vehicles]);
+
+  const availableDrivers = useMemo(() => {
+    if (selectedVehicleId === 'none') return [] as Driver[];
+    return drivers.filter((driver) => {
+      if (!driver.vehicleId) return true;
+      return driver.vehicleId.toString() === selectedVehicleId;
+    });
+  }, [drivers, selectedVehicleId]);
+
+  const tripById = useMemo(() => new Map(trips.map((trip) => [trip.id, trip])), [trips]);
+
+  const filteredGroups = useMemo(() => {
+    if (!dateFilter) return groups;
+
+    return groups.filter((group) =>
+      group.tripIds.some((tripId) => {
+        const trip = tripById.get(tripId);
+        return trip?.pickupTime?.startsWith(dateFilter);
+      })
+    );
+  }, [groups, tripById, dateFilter]);
+
+  useEffect(() => {
+    if (selectedVehicleId === 'none') {
+      setSelectedDriverId('none');
+      return;
+    }
+
+    if (
+      selectedDriverId !== 'none' &&
+      !availableDrivers.some((driver) => driver.id?.toString() === selectedDriverId)
+    ) {
+      setSelectedDriverId('none');
+    }
+  }, [selectedVehicleId, selectedDriverId, availableDrivers]);
+
+  const selectedTripDetails = useMemo<Trip[]>(() => {
+    if (!selectedTripIds.length) return [];
+    return trips.filter((trip) => selectedTripIds.includes(trip.id));
+  }, [trips, selectedTripIds]);
+
+  const totalPassengers = useMemo(() => {
+    return selectedTripDetails.reduce((sum, trip) => sum + (trip.passengers ?? 0), 0);
+  }, [selectedTripDetails]);
+
+  const totalRevenue = useMemo(() => {
+    return selectedTripDetails.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
+  }, [selectedTripDetails]);
+
+  interface EditPayload {
+    group: TripGroup;
+    tripIds: string[];
+    tripDetails: Trip[];
+    vehicle?: Vehicle;
+    driver?: Driver;
+  }
+
+  interface RemoveTripPayload {
+    group: TripGroup;
+    tripId: string;
+  }
+
+  const editGroupMutation = useMutation({
+    mutationFn: async ({ group, tripIds, tripDetails, vehicle, driver }: EditPayload) => {
+      const originalTripIds = group.tripIds;
+      const removedTripIds = originalTripIds.filter((id) => !tripIds.includes(id));
+
+      await Promise.all(
+        removedTripIds.map((id) =>
+          updateTrip(id, {
+            groupId: undefined,
+            status: 'Đã xác nhận',
+            vehicleId: undefined,
+            vehicleName: undefined,
+            driverId: undefined,
+            driverName: undefined,
+          })
+        )
+      );
+
+      const nextTripStatus = vehicle && driver ? 'Đã phân xe' : 'Đã ghép chuyến';
+      const vehicleId = vehicle?.id != null ? vehicle.id.toString() : undefined;
+      const vehicleName = vehicle ? `${vehicle.name} - ${vehicle.licensePlate}` : undefined;
+      const driverId = driver?.id != null ? driver.id.toString() : undefined;
+      const driverName = driver?.name;
+
+      await Promise.all(
+        tripIds.map((id) =>
+          updateTrip(id, {
+            groupId: group.id,
+            status: nextTripStatus,
+            vehicleId,
+            vehicleName,
+            driverId,
+            driverName,
+          })
+        )
+      );
+
+      const totalPassengers = tripDetails.reduce((sum, trip) => sum + (trip.passengers ?? 0), 0);
+      const totalRevenue = tripDetails.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
+
+      await updateTripGroup(group.id, {
+        tripIds,
+        vehicleId,
+        vehicleName,
+        driverId,
+        driverName,
+        status: vehicle && driver ? 'Đã phân xe' : 'Đang ghép',
+        totalPassengers,
+        totalRevenue,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      toast({
+        title: 'Đã cập nhật nhóm chuyến',
+        description: 'Danh sách khách và phương tiện đã được cập nhật',
+      });
+      setIsDialogOpen(false);
+      resetEditState();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Không thể cập nhật',
+        description: error instanceof Error ? error.message : 'Đã xảy ra lỗi khi lưu dữ liệu',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const removeTripMutation = useMutation({
+    mutationFn: async ({ group, tripId }: RemoveTripPayload) => {
+      await updateTrip(tripId, {
+        groupId: undefined,
+        status: 'Đã xác nhận',
+        vehicleId: undefined,
+        vehicleName: undefined,
+        driverId: undefined,
+        driverName: undefined,
+      });
+
+      const remainingTripIds = group.tripIds.filter((id) => id !== tripId);
+      const remainingTrips = trips.filter((trip) => remainingTripIds.includes(trip.id));
+      const totalPassengers = remainingTrips.reduce((sum, trip) => sum + (trip.passengers ?? 0), 0);
+      const totalRevenue = remainingTrips.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
+
+      await updateTripGroup(group.id, {
+        tripIds: remainingTripIds,
+        vehicleId: group.vehicleId,
+        vehicleName: group.vehicleName,
+        driverId: group.driverId,
+        driverName: group.driverName,
+        status: remainingTripIds.length === 0 ? 'Đang ghép' : group.status,
+        totalPassengers,
+        totalRevenue,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      toast({
+        title: 'Đã loại bỏ chuyến',
+        description: 'Chuyến đã được đưa ra khỏi nhóm',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Không thể loại bỏ',
+        description: error instanceof Error ? error.message : 'Đã xảy ra lỗi khi cập nhật nhóm',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (group: TripGroup) => {
+      await Promise.all(
+        group.tripIds.map((tripId) =>
+          updateTrip(tripId, {
+            groupId: undefined,
+            status: 'Đã xác nhận',
+            vehicleId: undefined,
+            vehicleName: undefined,
+            driverId: undefined,
+            driverName: undefined,
+          })
+        )
+      );
+
+      await deleteTripGroup(group.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      toast({
+        title: 'Đã xoá nhóm chuyến',
+        description: 'Nhóm chuyến đã được xoá và các chuyến đã được trả lại trạng thái ban đầu',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Không thể xoá nhóm',
+        description: error instanceof Error ? error.message : 'Đã xảy ra lỗi khi xoá nhóm',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const isEditing = editGroupMutation.isPending;
+  const isRemovingTrip = removeTripMutation.isPending;
+  const isDeletingGroup = deleteGroupMutation.isPending;
+
+  const resetEditState = () => {
+    setEditingGroup(null);
+    setSelectedTripIds([]);
+    setSelectedVehicleId('none');
+    setSelectedDriverId('none');
+  };
+
+  const handleCloseDialog = () => {
+    if (isEditing) return;
+    setIsDialogOpen(false);
+    resetEditState();
+  };
+
+  const handleRemoveTrip = (group: TripGroup, tripId: string) => {
+    removeTripMutation.mutate({ group, tripId });
+  };
+
+  const handleDeleteGroup = (group: TripGroup) => {
+    if (!window.confirm('Bạn chắc chắn muốn xoá nhóm này? Tất cả các chuyến sẽ trở lại trạng thái chờ xác nhận.')) {
+      return;
+    }
+    deleteGroupMutation.mutate(group);
+  };
+
+  const handleToggleTrip = (tripId: string) => {
+    setSelectedTripIds((prev) =>
+      prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
+    );
+  };
+
+  const handleOpenEdit = (group: TripGroup) => {
+    setEditingGroup(group);
+    setSelectedTripIds([...group.tripIds]);
+    setSelectedVehicleId(group.vehicleId ?? 'none');
+    setSelectedDriverId(group.driverId ?? 'none');
+    setIsDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!editingGroup) return;
+    if (selectedTripIds.length === 0) {
+      toast({
+        title: 'Chưa chọn chuyến',
+        description: 'Vui lòng chọn ít nhất một chuyến trong nhóm',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const vehicle = selectedVehicleId === 'none' ? undefined : vehicles.find((item) => item.id?.toString() === selectedVehicleId);
+    const driver = selectedDriverId === 'none' ? undefined : drivers.find((item) => item.id?.toString() === selectedDriverId);
+
+    editGroupMutation.mutate({
+      group: editingGroup,
+      tripIds: selectedTripIds,
+      tripDetails: selectedTripDetails,
+      vehicle,
+      driver,
+    });
+  };
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Đang kiểm tra phiên đăng nhập...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">Vui lòng đăng nhập để quản lý nhóm chuyến.</p>
+      </div>
+    );
+  }
+
+  const statusColors: Record<string, string> = {
+    'Đang ghép': 'bg-blue-100 text-blue-700 border-blue-200',
+    'Đã phân xe': 'bg-purple-100 text-purple-700 border-purple-200',
+    'Đang chạy': 'bg-green-100 text-green-700 border-green-200',
+    'Hoàn thành': 'bg-gray-100 text-gray-700 border-gray-200',
+  };
+
+  return (
+    <div className="flex flex-col h-full w-full">
+      <header className="flex items-center sticky top-0 z-10 gap-4 border-b bg-white px-6 py-4 shadow-sm">
+        <SidebarTrigger />
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-800">Nhóm Chuyến Đã Ghép</h1>
+          <p className="text-sm text-muted-foreground">Quản lý và phân xe cho các nhóm chuyến</p>
+        </div>
+        <Link to="/dispatch">
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <GitMerge size={20} />
+            Ghép Chuyến Mới
+          </Button>
+        </Link>
+      </header>
+
+      <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <Card>
+            <CardContent className="p-4 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                Chọn ngày hiển thị nhóm chuyến
+              </div>
+              <div className="w-full sm:w-64">
+                <DatePickerField
+                  value={dateFilter}
+                  onChange={(value) => {
+                    setDateFilter(value);
+                    queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
+                    queryClient.invalidateQueries({ queryKey: ['trips'] });
+                  }}
+                  allowClear
+                  placeholder="Chọn ngày"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {isLoading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Đang tải...</p>
+            </div>
+          ) : groups.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Truck className="mx-auto mb-4 text-gray-300" size={64} />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                  Chưa có nhóm chuyến nào
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Vào trang "Ghép Chuyến" để tạo nhóm chuyến mới
+                </p>
+                <Link to="/dispatch">
+                  <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+                    <GitMerge size={20} />
+                    Đi đến Ghép Chuyến
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          ) : filteredGroups.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Truck className="mx-auto mb-4 text-gray-300" size={64} />
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                  Không có nhóm chuyến trong ngày đã chọn
+                </h3>
+                <p className="text-muted-foreground">
+                  Điều chỉnh bộ lọc ngày để xem thêm nhóm chuyến
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+      {filteredGroups.map((group, index) => {
+        const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
+        const canEditGroup = group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
+                
+                return (
+                  <motion.div
+                    key={group.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="hover:shadow-xl transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-1">
+                              {group.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              Tạo lúc: {new Date(group.createdAt).toLocaleString('vi-VN')}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[group.status]}`}>
+                              {group.status}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => handleOpenEdit(group)}
+                              disabled={!canEditGroup}
+                              title={
+                                canEditGroup
+                                  ? 'Chỉnh sửa nhóm chuyến'
+                                  : 'Không thể chỉnh sửa khi nhóm đang chạy hoặc đã hoàn thành'
+                              }
+                            >
+                              <Pencil size={16} />
+                              Sửa
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 text-red-600 hover:text-red-700"
+                              onClick={() => handleDeleteGroup(group)}
+                              disabled={isDeletingGroup}
+                            >
+                              Xoá
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+                          <div className="text-center">
+                            <p className="text-sm text-muted-foreground mb-1">Số chuyến</p>
+                            <p className="text-2xl font-bold text-blue-600">{group.tripIds.length}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-muted-foreground mb-1 flex items-center justify-center gap-1">
+                              <Users size={14} />
+                              Hành khách
+                            </p>
+                            <p className="text-2xl font-bold text-purple-600">{group.totalPassengers}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-muted-foreground mb-1 flex items-center justify-center gap-1">
+                              <DollarSign size={14} />
+                              Doanh thu
+                            </p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {(group.totalRevenue / 1000000).toFixed(1)}M
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Vehicle Assignment */}
+                        {group.vehicleId ? (
+                          <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm text-green-700 mb-1">Đã phân xe</p>
+                                <p className="font-semibold text-green-900">
+                                  🚗 {group.vehicleName}
+                                </p>
+                                <p className="text-sm text-green-700">
+                                  👤 Tài xế: {group.driverName}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg mb-4">
+                            <p className="text-sm text-orange-700 mb-2">
+                              ⚠️ Chưa phân xe và tài xế
+                            </p>
+                            <Link to={`/assign-vehicle/${group.id}`}>
+                              <Button size="sm" className="gap-2 bg-orange-600 hover:bg-orange-700">
+                                <Truck size={16} />
+                                Phân Xe Ngay
+                              </Button>
+                            </Link>
+                          </div>
+                        )}
+
+                        {/* Trip List */}
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Danh sách chuyến trong nhóm:
+                          </p>
+                          {groupTrips.map((trip) => (
+                            <div key={trip.id} className="p-3 bg-white border rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-800">{trip.customerName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {trip.pickupLocation} → {trip.dropoffLocation}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="text-sm font-medium text-gray-700">
+                                      {new Date(trip.pickupTime).toLocaleTimeString('vi-VN', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {trip.passengers} người
+                                    </p>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    onClick={() => handleRemoveTrip(group, trip.id)}
+                                    disabled={isRemovingTrip}
+                                  >
+                                    Loại bỏ
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Actions */}
+                        {!group.vehicleId && (
+                          <div className="mt-4 pt-4 border-t">
+                            <Link to={`/assign-vehicle/${group.id}`}>
+                              <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700">
+                                <Truck size={20} />
+                                Phân Xe & Tài Xế
+                                <ArrowRight size={16} />
+                              </Button>
+                            </Link>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </main>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => (!open ? handleCloseDialog() : setIsDialogOpen(true))}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa nhóm chuyến</DialogTitle>
+          </DialogHeader>
+          {editingGroup && (
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Chọn chuyến trong nhóm</Label>
+                  <span className="text-sm text-muted-foreground">
+                    Đang chọn {selectedTripIds.length} chuyến
+                  </span>
+                </div>
+                <ScrollArea className="h-64 rounded-md border">
+                  <div className="p-3 space-y-3">
+                    {availableTrips.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        Không có chuyến phù hợp để thêm vào nhóm này
+                      </p>
+                    ) : (
+                      availableTrips.map((trip) => {
+                        const checked = selectedTripIds.includes(trip.id);
+                        const statusLocked = ['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
+                        const disabled = (!!trip.groupId && trip.groupId !== editingGroup.id) || statusLocked;
+                        return (
+                          <label
+                            key={trip.id}
+                            className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                              checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                            } ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={() => !disabled && handleToggleTrip(trip.id)}
+                              disabled={disabled || isEditing}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-gray-800">{trip.customerName}</p>
+                                <span className="text-sm font-medium text-green-600">
+                                  {trip.price.toLocaleString('vi-VN')} ₫
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {trip.pickupLocation} → {trip.dropoffLocation}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(trip.pickupTime).toLocaleString('vi-VN')} • {trip.passengers} người
+                              </p>
+                              {statusLocked && (
+                                <p className="text-xs text-orange-600 mt-1">
+                                  Không thể chỉnh sửa chuyến đang ở trạng thái {trip.status}
+                                </p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Chọn xe</Label>
+                  <Select
+                    value={selectedVehicleId}
+                    onValueChange={(value) => {
+                      setSelectedVehicleId(value);
+                      setSelectedDriverId('none');
+                    }}
+                    disabled={isEditing}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chưa phân xe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Chưa phân xe</SelectItem>
+                      {availableVehicles.map((vehicle) => (
+                        <SelectItem key={vehicle.id} value={vehicle.id}>
+                          {vehicle.name} ({vehicle.licensePlate})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Chọn tài xế</Label>
+                  <Select
+                    value={selectedDriverId}
+                    onValueChange={(value) => setSelectedDriverId(value)}
+                    disabled={isEditing || selectedVehicleId === 'none'}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chưa phân tài xế" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Chưa phân tài xế</SelectItem>
+                      {availableDrivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedVehicleId !== 'none' && availableDrivers.length === 0 && (
+                    <p className="flex items-center gap-2 text-xs text-orange-600">
+                      <AlertTriangle size={12} />
+                      Không có tài xế phù hợp cho xe này
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="rounded-lg border bg-gray-50 p-4 text-center">
+                  <p className="text-sm text-muted-foreground">Số chuyến</p>
+                  <p className="mt-1 text-xl font-semibold text-blue-600">{selectedTripIds.length}</p>
+                </div>
+                <div className="rounded-lg border bg-gray-50 p-4 text-center">
+                  <p className="text-sm text-muted-foreground">Tổng hành khách</p>
+                  <p className="mt-1 text-xl font-semibold text-purple-600">{totalPassengers}</p>
+                </div>
+                <div className="rounded-lg border bg-gray-50 p-4 text-center">
+                  <p className="text-sm text-muted-foreground">Tổng doanh thu</p>
+                  <p className="mt-1 text-xl font-semibold text-green-600">
+                  {(totalRevenue / 1_000_000).toFixed(2)}M ₫
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isEditing}>
+                  Hủy
+                </Button>
+                <Button onClick={handleSave} disabled={isEditing} className="gap-2">
+                  {isEditing && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Lưu thay đổi
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default GroupTrips;

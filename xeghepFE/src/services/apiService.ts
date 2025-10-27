@@ -1,0 +1,445 @@
+import {
+  API_BASE_URL,
+  ApiResponse,
+  LoginRequest,
+  LoginResponse,
+  UserResponse,
+  CreateUserRequest,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
+  DriverRequest,
+  DriverResponse,
+  VehicleRequest,
+  VehicleResponse,
+  TripResponse,
+  TripRequest,
+  TripGroupResponse,
+  TripGroupRequest,
+  CustomerResponse,
+  CustomerRequest,
+  TripPaymentResponse,
+  TripPaymentRequest,
+  DepositRecordResponse,
+  DepositRecordRequest,
+  AccountingSummaryResponse,
+} from './api';
+
+class ApiService {
+  private getAuthHeaders(): HeadersInit {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  }
+
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error || `HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  private normalizeDate(value?: string | null): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    if (trimmed.includes('T')) {
+      const [datePart, timePart] = trimmed.split('T');
+      const time = (timePart || '00:00:00').replace('Z', '');
+      return `${datePart} ${time.length === 5 ? `${time}:00` : time}`;
+    }
+    if (trimmed.includes(' ')) {
+      return trimmed;
+    }
+    return `${trimmed} 00:00:00`;
+  }
+
+  // Authentication APIs
+  async login(request: LoginRequest): Promise<LoginResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<LoginResponse>(response);
+  }
+
+  async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<ChangePasswordResponse>(response);
+  }
+
+  async getUsers(keyword?: string, page: number = 0, size: number = 10): Promise<ApiResponse<UserResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (keyword) params.append('q', keyword);
+    
+    const response = await fetch(`${API_BASE_URL}/api/auth/users?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<UserResponse>>(response);
+  }
+
+  async createUser(request: CreateUserRequest): Promise<UserResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/auth/users`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<UserResponse>(response);
+  }
+
+  async updateUser(id: number, request: CreateUserRequest): Promise<UserResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<UserResponse>(response);
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete user: ${response.status}`);
+    }
+  }
+
+  // Driver APIs
+  async getDrivers(keyword?: string, page: number = 0, size: number = 10): Promise<ApiResponse<DriverResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (keyword) params.append('q', keyword);
+    
+    const response = await fetch(`${API_BASE_URL}/drivers?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<DriverResponse>>(response);
+  }
+
+  async getDriver(id: number): Promise<DriverResponse> {
+    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<DriverResponse>(response);
+  }
+
+  async createDriver(request: DriverRequest): Promise<DriverResponse> {
+    const payload = {
+      ...request,
+      licenseExpiry: this.normalizeDate(request.licenseExpiry),
+      dateOfBirth: this.normalizeDate(request.dateOfBirth),
+      joinDate: this.normalizeDate(request.joinDate),
+    };
+    const response = await fetch(`${API_BASE_URL}/drivers`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<DriverResponse>(response);
+  }
+
+  async updateDriver(id: number, request: DriverRequest): Promise<DriverResponse> {
+    const payload = {
+      ...request,
+      licenseExpiry: this.normalizeDate(request.licenseExpiry),
+      dateOfBirth: this.normalizeDate(request.dateOfBirth),
+      joinDate: this.normalizeDate(request.joinDate),
+    };
+    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<DriverResponse>(response);
+  }
+
+  async deleteDriver(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete driver: ${response.status}`);
+    }
+  }
+
+  // Vehicle APIs
+  async getVehicles(keyword?: string, page: number = 0, size: number = 10): Promise<ApiResponse<VehicleResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (keyword) params.append('q', keyword);
+    
+    const response = await fetch(`${API_BASE_URL}/vehicles?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<VehicleResponse>>(response);
+  }
+
+  async getVehicle(id: number): Promise<VehicleResponse> {
+    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<VehicleResponse>(response);
+  }
+
+  async createVehicle(request: VehicleRequest): Promise<VehicleResponse> {
+    const response = await fetch(`${API_BASE_URL}/vehicles`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<VehicleResponse>(response);
+  }
+
+  async updateVehicle(id: number, request: VehicleRequest): Promise<VehicleResponse> {
+    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<VehicleResponse>(response);
+  }
+
+  async deleteVehicle(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete vehicle: ${response.status}`);
+    }
+  }
+
+  // Trip APIs
+  async getTrips(status?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (status) params.append('status', status);
+
+    const response = await fetch(`${API_BASE_URL}/trips?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<TripResponse>>(response);
+  }
+
+  async getTrip(id: number): Promise<TripResponse> {
+    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<TripResponse>(response);
+  }
+
+  async createTrip(request: TripRequest): Promise<TripResponse> {
+    const response = await fetch(`${API_BASE_URL}/trips`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<TripResponse>(response);
+  }
+
+  async updateTrip(id: number, request: TripRequest): Promise<TripResponse> {
+    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<TripResponse>(response);
+  }
+
+  async deleteTrip(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete trip: ${response.status}`);
+    }
+  }
+
+  // Payment APIs
+  async getTripPayments(driverId?: number, page: number = 0, size: number = 100): Promise<ApiResponse<TripPaymentResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (driverId != null) {
+      params.append('driverId', driverId.toString());
+    }
+    const response = await fetch(`${API_BASE_URL}/payments/trips?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<TripPaymentResponse>>(response);
+  }
+
+  async createTripPayment(request: TripPaymentRequest): Promise<TripPaymentResponse> {
+    const response = await fetch(`${API_BASE_URL}/payments/trips`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<TripPaymentResponse>(response);
+  }
+
+  async deleteTripPayment(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/payments/trips/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete payment: ${response.status}`);
+    }
+  }
+
+  async getDepositRecords(driverId?: number, page: number = 0, size: number = 100): Promise<ApiResponse<DepositRecordResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (driverId != null) {
+      params.append('driverId', driverId.toString());
+    }
+    const response = await fetch(`${API_BASE_URL}/payments/deposits?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<DepositRecordResponse>>(response);
+  }
+
+  async createDepositRecord(request: DepositRecordRequest): Promise<DepositRecordResponse> {
+    const response = await fetch(`${API_BASE_URL}/payments/deposits`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<DepositRecordResponse>(response);
+  }
+
+  async deleteDepositRecord(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/payments/deposits/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete deposit record: ${response.status}`);
+    }
+  }
+
+  async getAccountingSummary(from?: string, to?: string): Promise<AccountingSummaryResponse> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const query = params.toString();
+    const url = `${API_BASE_URL}/payments/summary${query ? `?${query}` : ''}`;
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<AccountingSummaryResponse>(response);
+  }
+
+  // Trip group APIs
+  async getTripGroups(status?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripGroupResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (status) params.append('status', status);
+
+    const response = await fetch(`${API_BASE_URL}/trip-groups?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<TripGroupResponse>>(response);
+  }
+
+  async getTripGroup(id: number): Promise<TripGroupResponse> {
+    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<TripGroupResponse>(response);
+  }
+
+  async createTripGroup(request: TripGroupRequest): Promise<TripGroupResponse> {
+    const response = await fetch(`${API_BASE_URL}/trip-groups`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<TripGroupResponse>(response);
+  }
+
+  async updateTripGroup(id: number, request: TripGroupRequest): Promise<TripGroupResponse> {
+    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<TripGroupResponse>(response);
+  }
+
+  async deleteTripGroup(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete trip group: ${response.status}`);
+    }
+  }
+
+  // Customer APIs
+  async searchCustomers(query?: string, page: number = 0, size: number = 100): Promise<ApiResponse<CustomerResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (query) params.append('q', query);
+
+    const response = await fetch(`${API_BASE_URL}/customers?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<CustomerResponse>>(response);
+  }
+
+  async getCustomer(id: number): Promise<CustomerResponse> {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<CustomerResponse>(response);
+  }
+
+  async createCustomer(request: CustomerRequest): Promise<CustomerResponse> {
+    const response = await fetch(`${API_BASE_URL}/customers`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<CustomerResponse>(response);
+  }
+
+  async updateCustomer(id: number, request: CustomerRequest): Promise<CustomerResponse> {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<CustomerResponse>(response);
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete customer: ${response.status}`);
+    }
+  }
+}
+
+export const apiService = new ApiService();

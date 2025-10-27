@@ -1,0 +1,47 @@
+is-active: ${LOGGING_MASKING_ENABLED:true}
+dispay-list-max-length: 10
+max-size: 5000
+
+masking-key:
+
+  include:
+#    - dob
+#    - dateOfBirth
+#    - name
+#    - identity
+#    - cardId
+#    - citizenId
+#    - location
+#    - address
+#    - cardNumber
+#    - gender
+#    - drivingLicense
+#    - passportId
+#    - latitude
+#    - longitude
+#    - home
+#    - nation
+#    - idNumber
+#    - id_number
+#    - cif
+#    - ward
+#    - province
+#    - district
+
+  encrypt:
+#    - password
+#    - encrypt
+#    - secret
+#    - token
+#    - authorization
+#    - encryt
+#    - otp
+
+  ignore:
+    - username
+    - contractNumber
+    - forwarded
+    - fileName
+    - className
+    - methodName
+    - mc-

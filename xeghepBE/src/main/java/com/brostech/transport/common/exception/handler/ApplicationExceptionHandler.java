@@ -1,0 +1,23 @@
+package com.brostech.transport.common.exception.handler;
+
+import com.brostech.transport.common.exception.AbstractException;
+import com.brostech.transport.common.exception.ApplicationException;
+import com.brostech.transport.common.exception.pojo.ExceptionDTO;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+
+@ControllerAdvice
+@Order(value = Ordered.HIGHEST_PRECEDENCE)
+public class ApplicationExceptionHandler extends AbstractExceptionHandler {
+
+    @Override
+    @ExceptionHandler(ApplicationException.class)
+    public ResponseEntity<ExceptionDTO> handle(AbstractException ex) {
+        return super.handle(ex);
+    }
+
+}
+
