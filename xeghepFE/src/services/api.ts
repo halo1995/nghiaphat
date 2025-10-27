@@ -3,14 +3,19 @@ const detectDefaultBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { origin } = window.location;
     if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
-      return 'http://localhost:8080/api';
+      return 'http://localhost:8080';
     }
-    return `${origin}/api`;
+    return origin;
   }
-  return 'http://localhost:8080/api';
+  return 'http://localhost:8080';
 };
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl();
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl();
+export const API_BASE_URL = rawBaseUrl.endsWith('/api')
+  ? rawBaseUrl.replace(/\/api$/, '')
+  : rawBaseUrl;
+
+export const API_ROOT = `${API_BASE_URL.replace(/\/+$/, '')}/api`;
 
 export interface ApiResponse<T> {
   content: T[];

@@ -1,5 +1,5 @@
 import {
-  API_BASE_URL,
+  API_ROOT,
   ApiResponse,
   LoginRequest,
   LoginResponse,
@@ -25,6 +25,10 @@ import {
 } from './api';
 
 class ApiService {
+  private buildUrl(path: string): string {
+    return `${API_ROOT}${path}`;
+  }
+
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('token');
     return {
@@ -62,7 +66,7 @@ class ApiService {
 
   // Authentication APIs
   async login(request: LoginRequest): Promise<LoginResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    const response = await fetch(this.buildUrl('/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -71,7 +75,7 @@ class ApiService {
   }
 
   async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+    const response = await fetch(this.buildUrl('/auth/change-password'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -85,15 +89,15 @@ class ApiService {
       size: size.toString(),
     });
     if (keyword) params.append('q', keyword);
-    
-    const response = await fetch(`${API_BASE_URL}/api/auth/users?${params}`, {
+
+    const response = await fetch(`${this.buildUrl('/auth/users')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<UserResponse>>(response);
   }
 
   async createUser(request: CreateUserRequest): Promise<UserResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/auth/users`, {
+    const response = await fetch(this.buildUrl('/auth/users'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -102,7 +106,7 @@ class ApiService {
   }
 
   async updateUser(id: number, request: CreateUserRequest): Promise<UserResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+    const response = await fetch(this.buildUrl(`/auth/users/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -111,7 +115,7 @@ class ApiService {
   }
 
   async deleteUser(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/auth/users/${id}`, {
+    const response = await fetch(this.buildUrl(`/auth/users/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -127,15 +131,15 @@ class ApiService {
       size: size.toString(),
     });
     if (keyword) params.append('q', keyword);
-    
-    const response = await fetch(`${API_BASE_URL}/drivers?${params}`, {
+
+    const response = await fetch(`${this.buildUrl('/drivers')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DriverResponse>>(response);
   }
 
   async getDriver(id: number): Promise<DriverResponse> {
-    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+    const response = await fetch(this.buildUrl(`/drivers/${id}`), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<DriverResponse>(response);
@@ -148,7 +152,7 @@ class ApiService {
       dateOfBirth: this.normalizeDate(request.dateOfBirth),
       joinDate: this.normalizeDate(request.joinDate),
     };
-    const response = await fetch(`${API_BASE_URL}/drivers`, {
+    const response = await fetch(this.buildUrl('/drivers'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -163,7 +167,7 @@ class ApiService {
       dateOfBirth: this.normalizeDate(request.dateOfBirth),
       joinDate: this.normalizeDate(request.joinDate),
     };
-    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+    const response = await fetch(this.buildUrl(`/drivers/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -172,7 +176,7 @@ class ApiService {
   }
 
   async deleteDriver(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/drivers/${id}`, {
+    const response = await fetch(this.buildUrl(`/drivers/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -188,22 +192,22 @@ class ApiService {
       size: size.toString(),
     });
     if (keyword) params.append('q', keyword);
-    
-    const response = await fetch(`${API_BASE_URL}/vehicles?${params}`, {
+
+    const response = await fetch(`${this.buildUrl('/vehicles')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<VehicleResponse>>(response);
   }
 
   async getVehicle(id: number): Promise<VehicleResponse> {
-    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+    const response = await fetch(this.buildUrl(`/vehicles/${id}`), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<VehicleResponse>(response);
   }
 
   async createVehicle(request: VehicleRequest): Promise<VehicleResponse> {
-    const response = await fetch(`${API_BASE_URL}/vehicles`, {
+    const response = await fetch(this.buildUrl('/vehicles'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -212,7 +216,7 @@ class ApiService {
   }
 
   async updateVehicle(id: number, request: VehicleRequest): Promise<VehicleResponse> {
-    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+    const response = await fetch(this.buildUrl(`/vehicles/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -221,7 +225,7 @@ class ApiService {
   }
 
   async deleteVehicle(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+    const response = await fetch(this.buildUrl(`/vehicles/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -235,21 +239,21 @@ class ApiService {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (status) params.append('status', status);
 
-    const response = await fetch(`${API_BASE_URL}/trips?${params}`, {
+    const response = await fetch(`${this.buildUrl('/trips')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripResponse>>(response);
   }
 
   async getTrip(id: number): Promise<TripResponse> {
-    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    const response = await fetch(this.buildUrl(`/trips/${id}`), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<TripResponse>(response);
   }
 
   async createTrip(request: TripRequest): Promise<TripResponse> {
-    const response = await fetch(`${API_BASE_URL}/trips`, {
+    const response = await fetch(this.buildUrl('/trips'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -258,7 +262,7 @@ class ApiService {
   }
 
   async updateTrip(id: number, request: TripRequest): Promise<TripResponse> {
-    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    const response = await fetch(this.buildUrl(`/trips/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -267,7 +271,7 @@ class ApiService {
   }
 
   async deleteTrip(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    const response = await fetch(this.buildUrl(`/trips/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -282,14 +286,14 @@ class ApiService {
     if (driverId != null) {
       params.append('driverId', driverId.toString());
     }
-    const response = await fetch(`${API_BASE_URL}/payments/trips?${params}`, {
+    const response = await fetch(`${this.buildUrl('/payments/trips')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripPaymentResponse>>(response);
   }
 
   async createTripPayment(request: TripPaymentRequest): Promise<TripPaymentResponse> {
-    const response = await fetch(`${API_BASE_URL}/payments/trips`, {
+    const response = await fetch(this.buildUrl('/payments/trips'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -298,7 +302,7 @@ class ApiService {
   }
 
   async deleteTripPayment(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/payments/trips/${id}`, {
+    const response = await fetch(this.buildUrl(`/payments/trips/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -312,14 +316,14 @@ class ApiService {
     if (driverId != null) {
       params.append('driverId', driverId.toString());
     }
-    const response = await fetch(`${API_BASE_URL}/payments/deposits?${params}`, {
+    const response = await fetch(`${this.buildUrl('/payments/deposits')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DepositRecordResponse>>(response);
   }
 
   async createDepositRecord(request: DepositRecordRequest): Promise<DepositRecordResponse> {
-    const response = await fetch(`${API_BASE_URL}/payments/deposits`, {
+    const response = await fetch(this.buildUrl('/payments/deposits'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -328,7 +332,7 @@ class ApiService {
   }
 
   async deleteDepositRecord(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/payments/deposits/${id}`, {
+    const response = await fetch(this.buildUrl(`/payments/deposits/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -342,7 +346,7 @@ class ApiService {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
     const query = params.toString();
-    const url = `${API_BASE_URL}/payments/summary${query ? `?${query}` : ''}`;
+    const url = `${this.buildUrl('/payments/summary')}${query ? `?${query}` : ''}`;
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
@@ -354,21 +358,21 @@ class ApiService {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (status) params.append('status', status);
 
-    const response = await fetch(`${API_BASE_URL}/trip-groups?${params}`, {
+    const response = await fetch(`${this.buildUrl('/trip-groups')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripGroupResponse>>(response);
   }
 
   async getTripGroup(id: number): Promise<TripGroupResponse> {
-    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+    const response = await fetch(this.buildUrl(`/trip-groups/${id}`), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<TripGroupResponse>(response);
   }
 
   async createTripGroup(request: TripGroupRequest): Promise<TripGroupResponse> {
-    const response = await fetch(`${API_BASE_URL}/trip-groups`, {
+    const response = await fetch(this.buildUrl('/trip-groups'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -377,7 +381,7 @@ class ApiService {
   }
 
   async updateTripGroup(id: number, request: TripGroupRequest): Promise<TripGroupResponse> {
-    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+    const response = await fetch(this.buildUrl(`/trip-groups/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -386,7 +390,7 @@ class ApiService {
   }
 
   async deleteTripGroup(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/trip-groups/${id}`, {
+    const response = await fetch(this.buildUrl(`/trip-groups/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -400,21 +404,21 @@ class ApiService {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (query) params.append('q', query);
 
-    const response = await fetch(`${API_BASE_URL}/customers?${params}`, {
+    const response = await fetch(`${this.buildUrl('/customers')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<CustomerResponse>>(response);
   }
 
   async getCustomer(id: number): Promise<CustomerResponse> {
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    const response = await fetch(this.buildUrl(`/customers/${id}`), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<CustomerResponse>(response);
   }
 
   async createCustomer(request: CustomerRequest): Promise<CustomerResponse> {
-    const response = await fetch(`${API_BASE_URL}/customers`, {
+    const response = await fetch(this.buildUrl('/customers'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -423,7 +427,7 @@ class ApiService {
   }
 
   async updateCustomer(id: number, request: CustomerRequest): Promise<CustomerResponse> {
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    const response = await fetch(this.buildUrl(`/customers/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -432,7 +436,7 @@ class ApiService {
   }
 
   async deleteCustomer(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    const response = await fetch(this.buildUrl(`/customers/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
