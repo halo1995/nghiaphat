@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/trips")
+@RequestMapping("transport-service/trips")
 public class TripController {
 
     private final TripService tripService;

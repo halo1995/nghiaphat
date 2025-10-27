@@ -18,7 +18,7 @@ import java.time.ZoneId;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/auth")
+@RequestMapping("/transport-service/auth")
 public class AuthController {
 
     private final UserService userService;

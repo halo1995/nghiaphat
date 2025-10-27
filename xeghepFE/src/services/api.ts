@@ -3,19 +3,18 @@ const detectDefaultBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { origin } = window.location;
     if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
-      return 'http://localhost:8080';
+      return 'http://localhost:8080transport-service';
     }
-    return origin;
+    return origin + '/transport-service';
   }
-  return 'http://localhost:8080';
+  return 'http://localhost:8080/transport-service';
 };
 
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl();
-export const API_BASE_URL = rawBaseUrl.endsWith('/api')
-  ? rawBaseUrl.replace(/\/api$/, '')
-  : rawBaseUrl;
+const sanitizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
 
-export const API_ROOT = `${API_BASE_URL.replace(/\/+$/, '')}/api`;
+export const API_BASE_URL = sanitizeBaseUrl(
+  import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl(),
+);
 
 export interface ApiResponse<T> {
   content: T[];

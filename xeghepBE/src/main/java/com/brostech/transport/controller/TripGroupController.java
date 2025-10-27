@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/trip-groups")
+@RequestMapping("transport-service/trip-groups")
 public class TripGroupController {
 
     private final TripGroupService tripGroupService;
