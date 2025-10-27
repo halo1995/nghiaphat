@@ -1,6 +1,5 @@
 import {
-  API_SERVICE_BASE_URL,
-  API_AUTH_BASE_URL,
+  API_BASE_URL,
   ApiResponse,
   LoginRequest,
   LoginResponse,
@@ -28,12 +27,7 @@ import {
 class ApiService {
   private buildUrl(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_SERVICE_BASE_URL}${normalizedPath}`;
-  }
-
-  private buildAuthUrl(path: string): string {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_AUTH_BASE_URL}${normalizedPath}`;
+    return `${API_BASE_URL}${normalizedPath}`;
   }
 
   private getAuthHeaders(): HeadersInit {
@@ -73,7 +67,7 @@ class ApiService {
 
   // Authentication APIs
   async login(request: LoginRequest): Promise<LoginResponse> {
-    const response = await fetch(this.buildAuthUrl('/auth/login'), {
+    const response = await fetch(this.buildUrl('/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -82,7 +76,7 @@ class ApiService {
   }
 
   async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-    const response = await fetch(this.buildAuthUrl('/auth/change-password'), {
+    const response = await fetch(this.buildUrl('/auth/change-password'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -97,14 +91,14 @@ class ApiService {
     });
     if (keyword) params.append('q', keyword);
 
-    const response = await fetch(`${this.buildAuthUrl('/auth/users')}?${params}`, {
+    const response = await fetch(`${this.buildUrl('/auth/users')}?${params}`, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<UserResponse>>(response);
   }
 
   async createUser(request: CreateUserRequest): Promise<UserResponse> {
-    const response = await fetch(this.buildAuthUrl('/auth/users'), {
+    const response = await fetch(this.buildUrl('/auth/users'), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -113,7 +107,7 @@ class ApiService {
   }
 
   async updateUser(id: number, request: CreateUserRequest): Promise<UserResponse> {
-    const response = await fetch(this.buildAuthUrl(`/auth/users/${id}`), {
+    const response = await fetch(this.buildUrl(`/auth/users/${id}`), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(request),
@@ -122,7 +116,7 @@ class ApiService {
   }
 
   async deleteUser(id: number): Promise<void> {
-    const response = await fetch(this.buildAuthUrl(`/auth/users/${id}`), {
+    const response = await fetch(this.buildUrl(`/auth/users/${id}`), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
