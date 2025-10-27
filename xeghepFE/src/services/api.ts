@@ -11,7 +11,7 @@ const detectDefaultBaseUrl = () => {
   return 'http://localhost:8080/transport-service';
 };
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL + '/transport-service' || detectDefaultBaseUrl();
+export const API_BASE_URL = detectDefaultBaseUrl();
 
 export interface ApiResponse<T> {
   content: T[];

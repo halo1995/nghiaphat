@@ -26,8 +26,7 @@ import {
 
 class ApiService {
   private buildUrl(path: string): string {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_BASE_URL}${normalizedPath}`;
+    return API_BASE_URL + path;
   }
 
   private getAuthHeaders(): HeadersInit {
