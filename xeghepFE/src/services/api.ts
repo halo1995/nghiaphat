@@ -1,35 +1,17 @@
 // API Configuration
-const SERVICE_PREFIX = '/transport-service';
-const AUTH_PREFIX = '/api';
 
 const detectDefaultBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { origin } = window.location;
     if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
-      return 'http://localhost:8080';
+      return 'http://localhost:8080/transport-service';
     }
     return origin;
   }
-  return 'http://localhost:8080';
+  return 'http://localhost:8080/transport-service';
 };
 
-const sanitizeBaseUrl = (url: string) => url.replace(/\/+$/, '');
-
-const appendPrefix = (base: string, prefix: string) => {
-  const sanitizedBase = sanitizeBaseUrl(base);
-  const normalizedPrefix = prefix.startsWith('/') ? prefix : `/${prefix}`;
-  if (sanitizedBase.endsWith(normalizedPrefix)) {
-    return sanitizedBase;
-  }
-  return `${sanitizedBase}${normalizedPrefix}`;
-};
-
-export const API_BASE_URL = sanitizeBaseUrl(
-  import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl(),
-);
-
-export const API_SERVICE_BASE_URL = appendPrefix(API_BASE_URL, SERVICE_PREFIX);
-export const API_AUTH_BASE_URL = appendPrefix(API_BASE_URL, AUTH_PREFIX);
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL + '/transport-service' || detectDefaultBaseUrl();
 
 export interface ApiResponse<T> {
   content: T[];
