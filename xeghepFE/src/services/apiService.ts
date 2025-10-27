@@ -1,5 +1,6 @@
 import {
-  API_BASE_URL,
+  API_SERVICE_BASE_URL,
+  API_AUTH_BASE_URL,
   ApiResponse,
   LoginRequest,
   LoginResponse,
@@ -27,12 +28,12 @@ import {
 class ApiService {
   private buildUrl(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_BASE_URL}${normalizedPath}`;
+    return `${API_SERVICE_BASE_URL}${normalizedPath}`;
   }
 
   private buildAuthUrl(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${API_BASE_URL}/api${normalizedPath}`;
+    return `${API_AUTH_BASE_URL}${normalizedPath}`;
   }
 
   private getAuthHeaders(): HeadersInit {
