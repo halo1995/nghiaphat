@@ -1,5 +1,16 @@
 // API Configuration
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const detectDefaultBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const { origin } = window.location;
+    if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
+      return 'http://localhost:8080';
+    }
+    return origin;
+  }
+  return 'http://localhost:8080';
+};
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || detectDefaultBaseUrl();
 
 export interface ApiResponse<T> {
   content: T[];
