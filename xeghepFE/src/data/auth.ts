@@ -89,9 +89,21 @@ export const deleteUser = async (userId: string) => {
   }
   await apiService.deleteUser(id);
 };
-export const changePassword = async (oldPassword: string, newPassword: string) => {
-  console.log('Changing password (mocked):', { oldPassword, newPassword });
-  return Promise.resolve({ success: true, message: 'Password changed successfully (mocked)' });
+export const changePassword = async (
+  userId: string | number,
+  oldPassword: string,
+  newPassword: string,
+) => {
+  const id = typeof userId === 'string' ? Number(userId) : userId;
+  if (!Number.isFinite(id)) {
+    throw new Error('userId không hợp lệ');
+  }
+
+  return apiService.changePassword({
+    userId: id,
+    oldPassword,
+    newPassword,
+  });
 };
 export const logout = () => {
   localStorage.removeItem('user');

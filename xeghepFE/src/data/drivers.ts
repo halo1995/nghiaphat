@@ -31,7 +31,7 @@ const STATUS_BACKEND_TO_FRONT: Record<DriverResponse['status'], Driver['status']
   NGUNG_HOAT_DONG: 'Ngừng hoạt động',
 };
 
-const mapDriverResponse = (driver: DriverResponse): Driver => ({
+export const mapDriverResponseToDriver = (driver: DriverResponse): Driver => ({
   id: driver.id.toString(),
   username: driver.username,
   name: driver.name,
@@ -55,12 +55,12 @@ const mapDriverResponse = (driver: DriverResponse): Driver => ({
 // Legacy functions - use useDrivers hook instead
 export const getDrivers = async (): Promise<Driver[]> => {
   const response = await apiService.getDrivers();
-  return response.content.map(mapDriverResponse);
+  return response.content.map(mapDriverResponseToDriver);
 };
 
 export const getDriver = async (id: number): Promise<Driver> => {
   const driver = await apiService.getDriver(id);
-  return mapDriverResponse(driver);
+  return mapDriverResponseToDriver(driver);
 };
 
 export const addDriver = async (driver: DriverRequest) => {

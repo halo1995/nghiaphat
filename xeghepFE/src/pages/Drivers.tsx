@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDrivers } from '@/hooks/useApi';
-import { updateDriver } from '@/data/drivers';
+import { mapDriverResponseToDriver, updateDriver } from '@/data/drivers';
 import type { DriverRequest } from '@/services/api';
 import type { Driver } from '@/data/drivers';
 import { useToast } from '@/hooks/use-toast';
@@ -22,7 +22,9 @@ const Drivers = () => {
   const navigate = useNavigate();
 
   const { data: driversData, isLoading } = useDrivers(searchTerm);
-  const drivers = driversData?.content || [];
+  const drivers = useMemo<Driver[]>(() => {
+    return (driversData?.content ?? []).map(mapDriverResponseToDriver);
+  }, [driversData]);
 
   const filteredDrivers = useMemo(() =>
     drivers.filter((driver) =>
