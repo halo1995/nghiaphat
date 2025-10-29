@@ -16,11 +16,13 @@ services:
       LOGGING_LEVEL_ORG_HIBERNATE_TYPE_DESCRIPTOR_SQL_BASICBINDER: TRACE
       LOGGING_FILE_PATH: /app/logs
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - app-network
     volumes:
       - ${DATA_ROOT:-../nghiaphat-data}/backend/logs:/app/logs
+    restart: unless-stopped
 
   frontend:
     build:
@@ -32,6 +34,8 @@ services:
       - backend
     networks:
       - app-network
+    restart: unless-stopped
+
   db:
     image: postgres:18-alpine
     environment:
@@ -42,8 +46,15 @@ services:
       - "5432:5432"
     volumes:
       - ${DATA_ROOT:-../nghiaphat-data}/db/data:/var/lib/postgresql/data
+      - ${DATA_ROOT:-../nghiaphat-data}/db/init:/docker-entrypoint-initdb.d
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
 networks:
   app-network:
