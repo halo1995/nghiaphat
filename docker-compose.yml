@@ -20,7 +20,7 @@ services:
     networks:
       - app-network
     volumes:
-      - ./data/backend/logs:/app/logs
+      - ${DATA_ROOT:-../nghiaphat-data}/backend/logs:/app/logs
 
   frontend:
     build:
@@ -41,7 +41,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./data/db/data:/var/lib/postgresql/data
+      - ${DATA_ROOT:-../nghiaphat-data}/db/data:/var/lib/postgresql/data
     networks:
       - app-network
 
