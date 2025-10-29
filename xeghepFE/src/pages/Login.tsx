@@ -40,6 +40,9 @@ const Login = () => {
         case 'driver':
           navigate('/driver');
           break;
+        case 'accountant':
+          navigate('/accounting');
+          break;
         default:
           navigate('/');
       }
@@ -113,28 +116,6 @@ const Login = () => {
               {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Button>
           </form>
-
-          <div className="mt-8 pt-6 border-t">
-            <p className="text-sm text-muted-foreground mb-3 font-medium">Tài khoản demo:</p>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span className="font-medium">Admin:</span>
-                <span className="text-muted-foreground">admin / admin123</span>
-              </div>
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span className="font-medium">Tổng đài:</span>
-                <span className="text-muted-foreground">tongdai / tongdai123</span>
-              </div>
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span className="font-medium">Điều phối:</span>
-                <span className="text-muted-foreground">dieuphoi / dieuphoi123</span>
-              </div>
-              <div className="flex justify-between p-2 bg-gray-50 rounded">
-                <span className="font-medium">Tài xế:</span>
-                <span className="text-muted-foreground">taixe / taixe123</span>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

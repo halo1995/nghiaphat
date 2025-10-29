@@ -51,7 +51,7 @@ const CreateBooking = () => {
     dropoffWardCode: '',
     pickupTime: '',
     distance: 0,
-    price: 0,
+    price: 200000,
     passengers: 1,
     notes: '',
   });

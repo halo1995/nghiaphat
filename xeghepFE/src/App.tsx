@@ -52,7 +52,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Role-based Route Component
-const RoleRoute = ({ children, allowed }: { children: React.ReactNode; allowed: Array<'admin' | 'dispatcher' | 'call_center' | 'driver'> }) => {
+const RoleRoute = ({ children, allowed }: { children: React.ReactNode; allowed: Array<'admin' | 'dispatcher' | 'call_center' | 'driver' | 'accountant'> }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
   
   if (isLoading) {
@@ -63,9 +63,19 @@ const RoleRoute = ({ children, allowed }: { children: React.ReactNode; allowed: 
     return <Navigate to="/login" replace />;
   }
   
-  if (!allowed.includes(user.role.toLowerCase() as any)) {
+  const role = user.role.toLowerCase() as 'admin' | 'dispatcher' | 'call_center' | 'driver' | 'accountant';
+
+  if (!allowed.includes(role)) {
     // Redirect to a sensible default per role
-    const fallback = user.role.toLowerCase() === 'admin' ? '/' : user.role.toLowerCase() === 'dispatcher' ? '/dispatch' : user.role.toLowerCase() === 'call_center' ? '/call-center' : '/driver';
+    const fallback = role === 'admin'
+      ? '/'
+      : role === 'dispatcher'
+        ? '/dispatch'
+        : role === 'call_center'
+          ? '/call-center'
+          : role === 'accountant'
+            ? '/accounting'
+            : '/driver';
     return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
@@ -122,7 +132,7 @@ function App() {
                         {/* Quản trị người dùng */}
                         <Route path="/users" element={<RoleRoute allowed={["admin"]}><Users /></RoleRoute>} />
                         {/* Kế toán */}
-                        <Route path="/accounting" element={<RoleRoute allowed={["admin"]}><Accounting /></RoleRoute>} />
+                        <Route path="/accounting" element={<RoleRoute allowed={["admin", "accountant"]}><Accounting /></RoleRoute>} />
                         
                         <Route path="*" element={<NotFound />} />
                       </Routes>
