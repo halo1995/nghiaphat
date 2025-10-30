@@ -1,16 +1,26 @@
 package com.brostech.transport.service.impl;
 
 import com.brostech.transport.dto.payment.AccountingSummaryDTO;
+import com.brostech.transport.dto.payment.CustomerAdvancePaymentDTO;
+import com.brostech.transport.dto.payment.CustomerAdvancePaymentRequest;
+import com.brostech.transport.dto.payment.CustomerAdvanceStatusUpdateRequest;
 import com.brostech.transport.dto.payment.DepositRecordDTO;
 import com.brostech.transport.dto.payment.DepositRecordRequest;
 import com.brostech.transport.dto.payment.DriverAccountingSummaryDTO;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceDTO;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceRequest;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
+import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.DepositRecord;
+import com.brostech.transport.jpa.entity.DriverExpenseAdvance;
 import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripPayment;
 import com.brostech.transport.jpa.entity.User;
+import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.jpa.repository.DepositRecordRepository;
+import com.brostech.transport.jpa.repository.DriverExpenseAdvanceRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.UserRepository;
@@ -26,6 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -47,6 +58,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final TripPaymentRepository tripPaymentRepository;
     private final DepositRecordRepository depositRecordRepository;
+    private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
+    private final DriverExpenseAdvanceRepository driverExpenseAdvanceRepository;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
     
@@ -73,8 +86,7 @@ public class PaymentServiceImpl implements PaymentService {
         
         payment = tripPaymentRepository.save(payment);
 
-        double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
-        driver.setOutstandingBalance(currentOutstanding + req.getAmount());
+        adjustDriverOutstanding(driver, req.getAmount());
         double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
         driver.setTotalEarnings(currentEarnings + req.getAmount());
         userRepository.save(driver);
@@ -105,12 +117,7 @@ public class PaymentServiceImpl implements PaymentService {
         tripPaymentRepository.deleteById(id);
         userRepository.findByIdAndRole(payment.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
-                    double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
-                    double updatedOutstanding = currentOutstanding - payment.getAmount();
-                    if (updatedOutstanding < 0) {
-                        updatedOutstanding = 0;
-                    }
-                    driver.setOutstandingBalance(updatedOutstanding);
+                    adjustDriverOutstanding(driver, -payment.getAmount());
                     double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
                     double updatedEarnings = currentEarnings - payment.getAmount();
                     driver.setTotalEarnings(Math.max(updatedEarnings, 0));
@@ -134,12 +141,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
         
         deposit = depositRecordRepository.save(deposit);
-        double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
-        double updatedOutstanding = currentOutstanding - req.getAmount();
-        if (updatedOutstanding < 0) {
-            updatedOutstanding = 0;
-        }
-        driver.setOutstandingBalance(updatedOutstanding);
+        adjustDriverOutstanding(driver, -req.getAmount());
         userRepository.save(driver);
         return toDepositRecordDTO(deposit);
     }
@@ -168,10 +170,195 @@ public class PaymentServiceImpl implements PaymentService {
         depositRecordRepository.deleteById(id);
         userRepository.findByIdAndRole(deposit.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
-                    double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
-                    driver.setOutstandingBalance(currentOutstanding + deposit.getAmount());
+                    adjustDriverOutstanding(driver, deposit.getAmount());
                     userRepository.save(driver);
                 });
+    }
+
+    // Customer advance payments
+
+    @Override
+    public CustomerAdvancePaymentDTO createCustomerAdvancePayment(CustomerAdvancePaymentRequest req) {
+        if (req.getTripId() != null) {
+            tripRepository.findById(req.getTripId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+        }
+
+        CustomerAdvancePayment advance = CustomerAdvancePayment.builder()
+                .tripId(req.getTripId())
+                .customerName(req.getCustomerName())
+                .customerPhone(req.getCustomerPhone())
+                .amount(req.getAmount())
+                .method(req.getMethod())
+                .status(CustomerAdvancePayment.Status.PENDING)
+                .collectedBy(req.getCollectedBy())
+                .collectedAt(new Date())
+                .receiptCode(req.getReceiptCode())
+                .note(req.getNote())
+                .build();
+
+        advance = customerAdvancePaymentRepository.save(advance);
+        return toCustomerAdvancePaymentDTO(advance);
+    }
+
+    @Override
+    public CustomerAdvancePaymentDTO updateCustomerAdvanceStatus(Long id, CustomerAdvanceStatusUpdateRequest req) {
+        CustomerAdvancePayment advance = customerAdvancePaymentRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer advance not found"));
+
+        CustomerAdvancePayment.Status targetStatus = req.getStatus();
+        if (targetStatus == CustomerAdvancePayment.Status.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot revert customer advance to PENDING");
+        }
+        if (advance.getStatus() == targetStatus) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer advance already in target status");
+        }
+        if (!isAllowedCustomerAdvanceTransition(advance.getStatus(), targetStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid customer advance status transition");
+        }
+
+        Date now = new Date();
+        switch (targetStatus) {
+            case SUBMITTED -> {
+                advance.setSubmittedAt(now);
+                advance.setSubmittedBy(req.getActionUserId());
+            }
+            case RECONCILED, REJECTED -> {
+                advance.setReconciledAt(now);
+                advance.setReconciledBy(req.getActionUserId());
+            }
+        }
+
+        if (req.getNote() != null) {
+            advance.setNote(req.getNote());
+        }
+
+        advance.setStatus(targetStatus);
+        advance = customerAdvancePaymentRepository.save(advance);
+        return toCustomerAdvancePaymentDTO(advance);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerAdvancePaymentDTO> searchCustomerAdvancePayments(String status, Long tripId, Pageable pageable) {
+        CustomerAdvancePayment.Status parsedStatus = parseCustomerAdvanceStatus(status);
+
+        if (parsedStatus != null && tripId != null) {
+            return customerAdvancePaymentRepository
+                    .findByStatusAndTripId(parsedStatus, tripId, pageable)
+                    .map(this::toCustomerAdvancePaymentDTO);
+        }
+        if (parsedStatus != null) {
+            return customerAdvancePaymentRepository
+                    .findByStatus(parsedStatus, pageable)
+                    .map(this::toCustomerAdvancePaymentDTO);
+        }
+        if (tripId != null) {
+            return customerAdvancePaymentRepository
+                    .findByTripId(tripId, pageable)
+                    .map(this::toCustomerAdvancePaymentDTO);
+        }
+        return customerAdvancePaymentRepository.findAll(pageable).map(this::toCustomerAdvancePaymentDTO);
+    }
+
+    // Driver expense advances
+
+    @Override
+    public DriverExpenseAdvanceDTO createDriverExpenseAdvance(DriverExpenseAdvanceRequest req) {
+        User driver = findDriverOrThrow(req.getDriverId());
+
+        if (req.getTripId() != null) {
+            Trip trip = tripRepository.findById(req.getTripId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+            if (trip.getDriverId() != null && !Objects.equals(trip.getDriverId(), driver.getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip is not assigned to the driver");
+            }
+        }
+
+        DriverExpenseAdvance advance = DriverExpenseAdvance.builder()
+                .driverId(driver.getId())
+                .tripId(req.getTripId())
+                .amount(req.getAmount())
+                .expenseType(req.getExpenseType())
+                .status(DriverExpenseAdvance.Status.REQUESTED)
+                .requestedBy(req.getRequestedBy())
+                .requestedAt(new Date())
+                .note(req.getNote())
+                .build();
+
+        advance = driverExpenseAdvanceRepository.save(advance);
+        return toDriverExpenseAdvanceDTO(advance);
+    }
+
+    @Override
+    public DriverExpenseAdvanceDTO updateDriverExpenseAdvanceStatus(Long id, DriverExpenseAdvanceStatusUpdateRequest req) {
+        DriverExpenseAdvance advance = driverExpenseAdvanceRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver advance not found"));
+
+        DriverExpenseAdvance.Status targetStatus = req.getStatus();
+        if (targetStatus == DriverExpenseAdvance.Status.REQUESTED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot revert driver advance to REQUESTED");
+        }
+        if (advance.getStatus() == targetStatus) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver advance already in target status");
+        }
+        if (!isAllowedDriverAdvanceTransition(advance.getStatus(), targetStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driver advance status transition");
+        }
+
+        Date now = new Date();
+        User driver = findDriverOrThrow(advance.getDriverId());
+
+        switch (targetStatus) {
+            case APPROVED -> {
+                advance.setApprovedAt(now);
+                advance.setApprovedBy(req.getActionUserId());
+                adjustDriverOutstanding(driver, advance.getAmount());
+                userRepository.save(driver);
+            }
+            case DEDUCTED -> {
+                advance.setDeductedAt(now);
+                advance.setDeductedBy(req.getActionUserId());
+                adjustDriverOutstanding(driver, -advance.getAmount());
+                userRepository.save(driver);
+            }
+            case REJECTED -> {
+                advance.setRejectionReason(req.getRejectionReason());
+                if (advance.getStatus() == DriverExpenseAdvance.Status.APPROVED) {
+                    adjustDriverOutstanding(driver, -advance.getAmount());
+                    userRepository.save(driver);
+                }
+            }
+        }
+
+        if (req.getNote() != null) {
+            advance.setNote(req.getNote());
+        }
+
+        advance.setStatus(targetStatus);
+        advance = driverExpenseAdvanceRepository.save(advance);
+        return toDriverExpenseAdvanceDTO(advance);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, Pageable pageable) {
+        DriverExpenseAdvance.Status parsedStatus = parseDriverAdvanceStatus(status);
+
+        if (driverId != null && parsedStatus != null) {
+            return driverExpenseAdvanceRepository
+                    .findByDriverIdAndStatus(driverId, parsedStatus, pageable)
+                    .map(this::toDriverExpenseAdvanceDTO);
+        }
+        if (driverId != null) {
+            return driverExpenseAdvanceRepository.findByDriverId(driverId, pageable)
+                    .map(this::toDriverExpenseAdvanceDTO);
+        }
+        if (parsedStatus != null) {
+            return driverExpenseAdvanceRepository.findByStatus(parsedStatus, pageable)
+                    .map(this::toDriverExpenseAdvanceDTO);
+        }
+        return driverExpenseAdvanceRepository.findAll(pageable).map(this::toDriverExpenseAdvanceDTO);
     }
 
     // Mapping methods
@@ -196,6 +383,45 @@ public class PaymentServiceImpl implements PaymentService {
                 .note(deposit.getNote())
                 .build();
     }
+
+    private CustomerAdvancePaymentDTO toCustomerAdvancePaymentDTO(CustomerAdvancePayment advance) {
+        return CustomerAdvancePaymentDTO.builder()
+                .id(advance.getId())
+                .tripId(advance.getTripId())
+                .customerName(advance.getCustomerName())
+                .customerPhone(advance.getCustomerPhone())
+                .amount(advance.getAmount())
+                .method(advance.getMethod().name())
+                .status(advance.getStatus().name())
+                .collectedBy(advance.getCollectedBy())
+                .collectedAt(formatDate(advance.getCollectedAt()))
+                .submittedBy(advance.getSubmittedBy())
+                .submittedAt(formatDate(advance.getSubmittedAt()))
+                .reconciledBy(advance.getReconciledBy())
+                .reconciledAt(formatDate(advance.getReconciledAt()))
+                .receiptCode(advance.getReceiptCode())
+                .note(advance.getNote())
+                .build();
+    }
+
+    private DriverExpenseAdvanceDTO toDriverExpenseAdvanceDTO(DriverExpenseAdvance advance) {
+        return DriverExpenseAdvanceDTO.builder()
+                .id(advance.getId())
+                .driverId(advance.getDriverId())
+                .tripId(advance.getTripId())
+                .amount(advance.getAmount())
+                .expenseType(advance.getExpenseType().name())
+                .status(advance.getStatus().name())
+                .requestedBy(advance.getRequestedBy())
+                .requestedAt(formatDate(advance.getRequestedAt()))
+                .approvedBy(advance.getApprovedBy())
+                .approvedAt(formatDate(advance.getApprovedAt()))
+                .deductedBy(advance.getDeductedBy())
+                .deductedAt(formatDate(advance.getDeductedAt()))
+                .rejectionReason(advance.getRejectionReason())
+                .note(advance.getNote())
+                .build();
+    }
     
     private String formatDate(Date date) {
         if (date == null) return null;
@@ -212,12 +438,16 @@ public class PaymentServiceImpl implements PaymentService {
         double totalCollected = 0;
         double totalDeposited = 0;
         double totalOutstanding = 0;
+        double totalCustomerPrepaidPending = sumCustomerAdvances(CustomerAdvancePayment.Status.PENDING);
+        double totalCustomerPrepaidSubmitted = sumCustomerAdvances(CustomerAdvancePayment.Status.SUBMITTED);
+        double totalDriverAdvanceOutstanding = 0;
         long totalCompletedTrips = 0;
         List<DriverAccountingSummaryDTO> summaries = new ArrayList<>();
 
         for (User driver : drivers) {
             List<TripPayment> payments = fetchPayments(driver.getId(), fromDate, toDate);
             List<DepositRecord> deposits = fetchDeposits(driver.getId(), fromDate, toDate);
+            double driverAdvanceOutstanding = sumDriverAdvances(driver.getId(), List.of(DriverExpenseAdvance.Status.APPROVED));
 
             double collected = payments.stream().mapToDouble(TripPayment::getAmount).sum();
             double deposited = deposits.stream().mapToDouble(DepositRecord::getAmount).sum();
@@ -227,6 +457,7 @@ public class PaymentServiceImpl implements PaymentService {
             totalCollected += collected;
             totalDeposited += deposited;
             totalOutstanding += outstanding;
+            totalDriverAdvanceOutstanding += driverAdvanceOutstanding;
             totalCompletedTrips += completedTrips;
 
             summaries.add(DriverAccountingSummaryDTO.builder()
@@ -236,6 +467,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .totalDeposited(deposited)
                     .outstanding(outstanding)
                     .completedTrips(completedTrips)
+                    .advanceOutstanding(driverAdvanceOutstanding)
                     .build());
         }
 
@@ -244,6 +476,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .totalDeposited(totalDeposited)
                 .totalOutstanding(totalOutstanding)
                 .totalCompletedTrips(totalCompletedTrips)
+                .totalCustomerPrepaidPending(totalCustomerPrepaidPending)
+                .totalCustomerPrepaidSubmitted(totalCustomerPrepaidSubmitted)
+                .totalDriverAdvanceOutstanding(totalDriverAdvanceOutstanding)
                 .byDriver(summaries)
                 .build();
     }
@@ -270,6 +505,18 @@ public class PaymentServiceImpl implements PaymentService {
                     .collect(Collectors.toList());
         }
         return depositRecordRepository.findByDriverId(driverId);
+    }
+
+    private double sumCustomerAdvances(CustomerAdvancePayment.Status status) {
+        return customerAdvancePaymentRepository.findByStatus(status).stream()
+                .mapToDouble(CustomerAdvancePayment::getAmount)
+                .sum();
+    }
+
+    private double sumDriverAdvances(Long driverId, Collection<DriverExpenseAdvance.Status> statuses) {
+        return driverExpenseAdvanceRepository.findByDriverIdAndStatusIn(driverId, statuses).stream()
+                .mapToDouble(DriverExpenseAdvance::getAmount)
+                .sum();
     }
 
     private long countCompletedTrips(Long driverId, Date from, Date to) {
@@ -310,5 +557,57 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (ParseException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Use yyyy-MM-dd or yyyy-MM-dd HH:mm:ss");
         }
+    }
+
+    private CustomerAdvancePayment.Status parseCustomerAdvanceStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return CustomerAdvancePayment.Status.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid customer advance status");
+        }
+    }
+
+    private DriverExpenseAdvance.Status parseDriverAdvanceStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return DriverExpenseAdvance.Status.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driver advance status");
+        }
+    }
+
+    private boolean isAllowedCustomerAdvanceTransition(CustomerAdvancePayment.Status current, CustomerAdvancePayment.Status target) {
+        return switch (current) {
+            case PENDING -> target == CustomerAdvancePayment.Status.SUBMITTED || target == CustomerAdvancePayment.Status.REJECTED;
+            case SUBMITTED -> target == CustomerAdvancePayment.Status.RECONCILED || target == CustomerAdvancePayment.Status.REJECTED;
+            case RECONCILED, REJECTED -> false;
+        };
+    }
+
+    private boolean isAllowedDriverAdvanceTransition(DriverExpenseAdvance.Status current, DriverExpenseAdvance.Status target) {
+        return switch (current) {
+            case REQUESTED -> target == DriverExpenseAdvance.Status.APPROVED || target == DriverExpenseAdvance.Status.REJECTED;
+            case APPROVED -> target == DriverExpenseAdvance.Status.DEDUCTED || target == DriverExpenseAdvance.Status.REJECTED;
+            case DEDUCTED, REJECTED -> false;
+        };
+    }
+
+    private User findDriverOrThrow(Long driverId) {
+        return userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
+    }
+
+    private void adjustDriverOutstanding(User driver, double delta) {
+        double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
+        double updated = currentOutstanding + delta;
+        if (updated < 0) {
+            updated = 0;
+        }
+        driver.setOutstandingBalance(updated);
     }
 }

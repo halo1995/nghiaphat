@@ -116,7 +116,7 @@ function App() {
                         <Route path="/assign-vehicle/:groupId" element={<RoleRoute allowed={["admin", "dispatcher"]}><AssignVehicle /></RoleRoute>} />
                         
                         {/* Tài xế */}
-                        <Route path="/driver" element={<RoleRoute allowed={["admin", "driver"]}><DriverDashboard /></RoleRoute>} />
+                        <Route path="/driver" element={<RoleRoute allowed={["driver"]}><DriverDashboard /></RoleRoute>} />
                         <Route path="/driver-trips" element={<RoleRoute allowed={["admin", "driver"]}><DriverTrips /></RoleRoute>} />
                         <Route path="/trip-execution/:tripId" element={<RoleRoute allowed={["admin", "driver"]}><TripExecution /></RoleRoute>} />
                         

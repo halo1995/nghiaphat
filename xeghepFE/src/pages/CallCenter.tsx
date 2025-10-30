@@ -6,12 +6,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { getTrips, updateTrip, deleteTrip, type Trip } from '@/data/trips';
-import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { getProvinces, getWards, type ProvinceOption, type WardOption } from '@/data/locations';
@@ -19,6 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { Textarea } from '@/components/ui/textarea';
+import { createCustomerAdvance, type CustomerAdvanceMethod } from '@/data/accounting';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -48,7 +50,7 @@ const CallCenter = () => {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
 
   const { data: trips = [], isLoading } = useQuery({
     queryKey: ['trips'],
@@ -65,6 +67,16 @@ const CallCenter = () => {
   const [dropoffWards, setDropoffWards] = useState<WardOption[]>([]);
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
   const [dropoffPickerOpen, setDropoffPickerOpen] = useState(false);
+  const [customerAdvanceForm, setCustomerAdvanceForm] = useState({
+    tripId: '',
+    customerName: '',
+    customerPhone: '',
+    amount: '',
+    method: 'cash' as CustomerAdvanceMethod,
+    receiptCode: '',
+    note: '',
+  });
+  const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Trip> }) => updateTrip(id, data),
@@ -97,6 +109,33 @@ const CallCenter = () => {
         description: 'Thời gian đón/trả đã được điều chỉnh',
       });
       setEditingTrip(null);
+    },
+  });
+
+  const customerAdvanceMutation = useMutation({
+    mutationFn: createCustomerAdvance,
+    onSuccess: () => {
+      toast({
+        title: 'Đã ghi nhận ứng trước',
+        description: 'Đã tạo phiếu ứng tiền khách hàng',
+      });
+      setCustomerAdvanceForm({
+        tripId: '',
+        customerName: '',
+        customerPhone: '',
+        amount: '',
+        method: 'cash',
+        receiptCode: '',
+        note: '',
+      });
+      queryClient.invalidateQueries({ queryKey: ['customer-advances'] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Không thể ghi nhận',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -404,6 +443,9 @@ const CallCenter = () => {
     );
   }
 
+  const role = user?.role ? user.role.toString().toLowerCase() : undefined;
+  const allowCustomerFinance = role === 'call_center' || role === 'admin';
+
   return (
     <div className="flex flex-col h-full w-full">
       <header className="flex items-center sticky top-0 z-10 gap-4 border-b bg-white px-6 py-4 shadow-sm">
@@ -412,12 +454,148 @@ const CallCenter = () => {
           <h1 className="text-2xl font-bold text-gray-800">Tổng Đài - Quản Lý Đặt Chuyến</h1>
           <p className="text-sm text-muted-foreground">Tiếp nhận và xác nhận đặt chuyến từ khách hàng</p>
         </div>
-        <Link to="/create-booking">
-          <Button className="gap-2 bg-green-600 hover:bg-green-700">
-            <Plus size={20} />
-            Tạo Đặt Chuyến
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          {allowCustomerFinance && (
+            <Dialog open={financeDialogOpen} onOpenChange={setFinanceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Wallet size={18} />
+                  Ghi nhận ứng trước
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Ghi nhận ứng trước của khách</DialogTitle>
+                </DialogHeader>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const amount = Number(customerAdvanceForm.amount || 0);
+                      if (!customerAdvanceForm.customerName.trim() || !customerAdvanceForm.customerPhone.trim() || !amount || amount <= 0) {
+                        toast({
+                          title: 'Thiếu thông tin',
+                          description: 'Vui lòng nhập tên khách, số điện thoại và số tiền hợp lệ',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      customerAdvanceMutation.mutate({
+                        tripId: customerAdvanceForm.tripId.trim() || undefined,
+                        customerName: customerAdvanceForm.customerName.trim(),
+                        customerPhone: customerAdvanceForm.customerPhone.trim(),
+                        amount,
+                        method: customerAdvanceForm.method,
+                        collectedBy: user?.id ? user.id.toString() : undefined,
+                        receiptCode: customerAdvanceForm.receiptCode.trim() || undefined,
+                        note: customerAdvanceForm.note.trim() || undefined,
+                      });
+                    }}
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="finance-advance-trip">Mã chuyến (nếu có)</Label>
+                        <Input
+                          id="finance-advance-trip"
+                          placeholder="VD: 142"
+                          value={customerAdvanceForm.tripId}
+                          onChange={(event) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="finance-advance-amount">Số tiền (₫) *</Label>
+                        <Input
+                          id="finance-advance-amount"
+                          type="number"
+                          min={0}
+                          placeholder="VD: 500000"
+                          value={customerAdvanceForm.amount}
+                          onChange={(event) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="finance-advance-customer">Tên khách *</Label>
+                        <Input
+                          id="finance-advance-customer"
+                          value={customerAdvanceForm.customerName}
+                          onChange={(event) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, customerName: event.target.value }))
+                          }
+                          placeholder="Ví dụ: Nguyễn Văn A"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="finance-advance-phone">Số điện thoại *</Label>
+                        <Input
+                          id="finance-advance-phone"
+                          value={customerAdvanceForm.customerPhone}
+                          onChange={(event) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, customerPhone: event.target.value }))
+                          }
+                          placeholder="0987654321"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Hình thức</Label>
+                        <Select
+                          value={customerAdvanceForm.method}
+                          onValueChange={(value) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, method: value as CustomerAdvanceMethod }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cash">Tiền mặt</SelectItem>
+                            <SelectItem value="transfer">Chuyển khoản</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="finance-advance-receipt">Mã phiếu/biên lai</Label>
+                        <Input
+                          id="finance-advance-receipt"
+                          value={customerAdvanceForm.receiptCode}
+                          onChange={(event) =>
+                            setCustomerAdvanceForm((prev) => ({ ...prev, receiptCode: event.target.value }))
+                          }
+                          placeholder="Mã nội bộ hoặc biên lai"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="finance-advance-note">Ghi chú</Label>
+                      <Textarea
+                        id="finance-advance-note"
+                        rows={3}
+                        placeholder="Thông tin bổ sung cho kế toán"
+                        value={customerAdvanceForm.note}
+                        onChange={(event) =>
+                          setCustomerAdvanceForm((prev) => ({ ...prev, note: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={customerAdvanceMutation.isPending} className="min-w-32">
+                        {customerAdvanceMutation.isPending ? 'Đang lưu...' : 'Ghi nhận'}
+                      </Button>
+                    </div>
+                  </form>
+              </DialogContent>
+            </Dialog>
+          )}
+          <Link to="/create-booking">
+            <Button className="gap-2 bg-green-600 hover:bg-green-700">
+              <Plus size={20} />
+              Tạo Đặt Chuyến
+            </Button>
+          </Link>
+        </div>
       </header>
 
       <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">

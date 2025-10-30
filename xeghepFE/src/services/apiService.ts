@@ -22,6 +22,12 @@ import {
   DepositRecordResponse,
   DepositRecordRequest,
   AccountingSummaryResponse,
+  CustomerAdvancePaymentResponse,
+  CustomerAdvancePaymentRequest,
+  CustomerAdvanceStatusUpdateRequest,
+  DriverExpenseAdvanceResponse,
+  DriverExpenseAdvanceRequest,
+  DriverExpenseAdvanceStatusUpdateRequest,
 } from './api';
 
 class ApiService {
@@ -339,6 +345,84 @@ class ApiService {
     if (!response.ok) {
       throw new Error(`Failed to delete deposit record: ${response.status}`);
     }
+  }
+
+  async getCustomerAdvancePayments(
+    status?: string,
+    tripId?: number,
+    page: number = 0,
+    size: number = 100,
+  ): Promise<ApiResponse<CustomerAdvancePaymentResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (status) params.append('status', status);
+    if (tripId != null) params.append('tripId', tripId.toString());
+
+    const response = await fetch(`${this.buildUrl('/payments/customer-advances')}?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<CustomerAdvancePaymentResponse>>(response);
+  }
+
+  async createCustomerAdvancePayment(
+    request: CustomerAdvancePaymentRequest,
+  ): Promise<CustomerAdvancePaymentResponse> {
+    const response = await fetch(this.buildUrl('/payments/customer-advances'), {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<CustomerAdvancePaymentResponse>(response);
+  }
+
+  async updateCustomerAdvanceStatus(
+    id: number,
+    request: CustomerAdvanceStatusUpdateRequest,
+  ): Promise<CustomerAdvancePaymentResponse> {
+    const response = await fetch(this.buildUrl(`/payments/customer-advances/${id}/status`), {
+      method: 'PATCH',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<CustomerAdvancePaymentResponse>(response);
+  }
+
+  async getDriverExpenseAdvances(
+    driverId?: number,
+    status?: string,
+    page: number = 0,
+    size: number = 100,
+  ): Promise<ApiResponse<DriverExpenseAdvanceResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (driverId != null) params.append('driverId', driverId.toString());
+    if (status) params.append('status', status);
+
+    const response = await fetch(`${this.buildUrl('/payments/driver-advances')}?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<DriverExpenseAdvanceResponse>>(response);
+  }
+
+  async createDriverExpenseAdvance(
+    request: DriverExpenseAdvanceRequest,
+  ): Promise<DriverExpenseAdvanceResponse> {
+    const response = await fetch(this.buildUrl('/payments/driver-advances'), {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<DriverExpenseAdvanceResponse>(response);
+  }
+
+  async updateDriverExpenseAdvanceStatus(
+    id: number,
+    request: DriverExpenseAdvanceStatusUpdateRequest,
+  ): Promise<DriverExpenseAdvanceResponse> {
+    const response = await fetch(this.buildUrl(`/payments/driver-advances/${id}/status`), {
+      method: 'PATCH',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(request),
+    });
+    return this.handleResponse<DriverExpenseAdvanceResponse>(response);
   }
 
   async getAccountingSummary(from?: string, to?: string): Promise<AccountingSummaryResponse> {

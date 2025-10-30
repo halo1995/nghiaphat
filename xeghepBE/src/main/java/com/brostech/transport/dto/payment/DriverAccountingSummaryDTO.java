@@ -16,4 +16,5 @@ public class DriverAccountingSummaryDTO {
     private Double totalDeposited;
     private Double outstanding;
     private Long completedTrips;
+    private Double advanceOutstanding;
 }

@@ -16,5 +16,8 @@ public class AccountingSummaryDTO {
     private Double totalDeposited;
     private Double totalOutstanding;
     private Long totalCompletedTrips;
+    private Double totalCustomerPrepaidPending;
+    private Double totalCustomerPrepaidSubmitted;
+    private Double totalDriverAdvanceOutstanding;
     private List<DriverAccountingSummaryDTO> byDriver;
 }

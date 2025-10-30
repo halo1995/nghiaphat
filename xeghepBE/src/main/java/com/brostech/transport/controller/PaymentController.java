@@ -1,8 +1,14 @@
 package com.brostech.transport.controller;
 
 import com.brostech.transport.dto.payment.AccountingSummaryDTO;
+import com.brostech.transport.dto.payment.CustomerAdvancePaymentDTO;
+import com.brostech.transport.dto.payment.CustomerAdvancePaymentRequest;
+import com.brostech.transport.dto.payment.CustomerAdvanceStatusUpdateRequest;
 import com.brostech.transport.dto.payment.DepositRecordDTO;
 import com.brostech.transport.dto.payment.DepositRecordRequest;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceDTO;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceRequest;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
 import com.brostech.transport.service.PaymentService;
@@ -19,6 +25,8 @@ import org.springframework.web.bind.annotation.*;
  * - Quản lý thanh toán chuyến đi: POST/GET/DELETE /payments/trips
  * - Quản lý đặt cọc: POST/GET/DELETE /payments/deposits
  * - Tra cứu lịch sử theo tài xế: GET /payments/trips?driverId=..., /payments/deposits?driverId=...
+ * - Quản lý tiền ứng trước khách hàng: POST/PATCH/GET /payments/customer-advances
+ * - Quản lý tạm ứng chi phí tài xế: POST/PATCH/GET /payments/driver-advances
  */
 @RestController
 @RequiredArgsConstructor
@@ -111,6 +119,46 @@ public class PaymentController {
     @DeleteMapping("/deposits/{id}")
     public void deleteDepositRecord(@PathVariable Long id) {
         paymentService.deleteDepositRecord(id);
+    }
+
+    // Customer advance payments
+
+    @PostMapping("/customer-advances")
+    public CustomerAdvancePaymentDTO createCustomerAdvance(@Valid @RequestBody CustomerAdvancePaymentRequest req) {
+        return paymentService.createCustomerAdvancePayment(req);
+    }
+
+    @PatchMapping("/customer-advances/{id}/status")
+    public CustomerAdvancePaymentDTO updateCustomerAdvanceStatus(@PathVariable Long id,
+                                                                 @Valid @RequestBody CustomerAdvanceStatusUpdateRequest req) {
+        return paymentService.updateCustomerAdvanceStatus(id, req);
+    }
+
+    @GetMapping("/customer-advances")
+    public Page<CustomerAdvancePaymentDTO> searchCustomerAdvances(@RequestParam(value = "status", required = false) String status,
+                                                                  @RequestParam(value = "tripId", required = false) Long tripId,
+                                                                  Pageable pageable) {
+        return paymentService.searchCustomerAdvancePayments(status, tripId, pageable);
+    }
+
+    // Driver expense advances
+
+    @PostMapping("/driver-advances")
+    public DriverExpenseAdvanceDTO createDriverAdvance(@Valid @RequestBody DriverExpenseAdvanceRequest req) {
+        return paymentService.createDriverExpenseAdvance(req);
+    }
+
+    @PatchMapping("/driver-advances/{id}/status")
+    public DriverExpenseAdvanceDTO updateDriverAdvanceStatus(@PathVariable Long id,
+                                                             @Valid @RequestBody DriverExpenseAdvanceStatusUpdateRequest req) {
+        return paymentService.updateDriverExpenseAdvanceStatus(id, req);
+    }
+
+    @GetMapping("/driver-advances")
+    public Page<DriverExpenseAdvanceDTO> searchDriverAdvances(@RequestParam(value = "driverId", required = false) Long driverId,
+                                                              @RequestParam(value = "status", required = false) String status,
+                                                              Pageable pageable) {
+        return paymentService.searchDriverExpenseAdvances(driverId, status, pageable);
     }
 
     /**

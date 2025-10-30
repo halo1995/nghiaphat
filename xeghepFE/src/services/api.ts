@@ -3,7 +3,7 @@
 const detectDefaultBaseUrl = () => {
   if (typeof window !== 'undefined') {
     const { origin } = window.location;
-    if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
+    if (origin.includes('localhost:3000') || origin.includes('127.0.0.1:3000')) {
       return 'http://localhost:8080/transport-service';
     }
     return origin + '/transport-service';   ;
@@ -242,6 +242,80 @@ export interface DepositRecordRequest {
   note?: string | null;
 }
 
+export type CustomerAdvanceStatus = 'PENDING' | 'SUBMITTED' | 'RECONCILED' | 'REJECTED';
+export type CustomerAdvanceMethod = 'CASH' | 'TRANSFER';
+
+export interface CustomerAdvancePaymentResponse {
+  id: number;
+  tripId: number | null;
+  customerName: string;
+  customerPhone: string;
+  amount: number;
+  method: CustomerAdvanceMethod;
+  status: CustomerAdvanceStatus;
+  collectedBy: number | null;
+  collectedAt: string;
+  submittedBy: number | null;
+  submittedAt: string | null;
+  reconciledBy: number | null;
+  reconciledAt: string | null;
+  receiptCode: string | null;
+  note: string | null;
+}
+
+export interface CustomerAdvancePaymentRequest {
+  tripId?: number | null;
+  customerName: string;
+  customerPhone: string;
+  amount: number;
+  method: CustomerAdvanceMethod;
+  collectedBy?: number | null;
+  receiptCode?: string | null;
+  note?: string | null;
+}
+
+export interface CustomerAdvanceStatusUpdateRequest {
+  status: CustomerAdvanceStatus;
+  actionUserId?: number | null;
+  note?: string | null;
+}
+
+export type DriverExpenseType = 'TOLL' | 'PARKING' | 'FUEL' | 'OTHER';
+export type DriverExpenseStatus = 'REQUESTED' | 'APPROVED' | 'DEDUCTED' | 'REJECTED';
+
+export interface DriverExpenseAdvanceResponse {
+  id: number;
+  driverId: number;
+  tripId: number | null;
+  amount: number;
+  expenseType: DriverExpenseType;
+  status: DriverExpenseStatus;
+  requestedBy: number | null;
+  requestedAt: string;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  deductedBy: number | null;
+  deductedAt: string | null;
+  rejectionReason: string | null;
+  note: string | null;
+}
+
+export interface DriverExpenseAdvanceRequest {
+  driverId: number;
+  tripId?: number | null;
+  amount: number;
+  expenseType: DriverExpenseType;
+  requestedBy?: number | null;
+  note?: string | null;
+}
+
+export interface DriverExpenseAdvanceStatusUpdateRequest {
+  status: DriverExpenseStatus;
+  actionUserId?: number | null;
+  note?: string | null;
+  rejectionReason?: string | null;
+}
+
 export interface DriverAccountingSummaryResponse {
   driverId: number;
   driverName: string;
@@ -249,6 +323,7 @@ export interface DriverAccountingSummaryResponse {
   totalDeposited: number;
   outstanding: number;
   completedTrips: number;
+  advanceOutstanding: number;
 }
 
 export interface AccountingSummaryResponse {
@@ -256,6 +331,9 @@ export interface AccountingSummaryResponse {
   totalDeposited: number;
   totalOutstanding: number;
   totalCompletedTrips: number;
+  totalCustomerPrepaidPending: number;
+  totalCustomerPrepaidSubmitted: number;
+  totalDriverAdvanceOutstanding: number;
   byDriver: DriverAccountingSummaryResponse[];
 }
 

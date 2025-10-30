@@ -87,12 +87,6 @@ export function AppSidebar() {
         ]
       },
       {
-        label: 'Tài Xế',
-        items: [
-          { title: 'Lịch Trình Của Tôi', icon: LayoutDashboard, href: '/driver' },
-        ]
-      },
-      {
         label: 'Quản Lý',
         items: [
           { title: 'Xe', icon: Car, href: '/vehicles' },

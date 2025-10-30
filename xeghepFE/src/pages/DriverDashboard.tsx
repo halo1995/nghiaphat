@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,10 +9,48 @@ import { Calendar, MapPin, Users, Clock, ArrowRight, CheckCircle, Wallet } from 
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { createDriverExpenseAdvance, getDriverExpenseAdvances, type DriverExpenseType, type DriverExpenseStatus } from '@/data/accounting';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
+const driverStatusLabels: Record<DriverExpenseStatus, string> = {
+  requested: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  deducted: 'Đã khấu trừ',
+  rejected: 'Từ chối',
+};
+
+const driverStatusVariants: Record<DriverExpenseStatus, 'outline' | 'secondary' | 'default' | 'destructive'> = {
+  requested: 'outline',
+  approved: 'secondary',
+  deducted: 'default',
+  rejected: 'destructive',
+};
+
+const driverExpenseLabels: Record<DriverExpenseType, string> = {
+  toll: 'Phí cầu đường',
+  parking: 'Phí bến bãi',
+  fuel: 'Nhiên liệu',
+  other: 'Khác',
+};
 
 const DriverDashboard = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [driverAdvanceForm, setDriverAdvanceForm] = useState({
+    amount: '',
+    expenseType: 'toll' as DriverExpenseType,
+    tripId: '',
+    note: '',
+  });
+  const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
   const driverId = user?.id ? user.id.toString() : '';
 
   const { data: allTrips = [], isLoading } = useQuery({
@@ -20,6 +58,29 @@ const DriverDashboard = () => {
     queryFn: getTrips,
     enabled: isAuthenticated && !authLoading,
   });
+
+  const driverAdvancesQ = useQuery({
+    queryKey: ['driver-expense-advances', driverId],
+    queryFn: () => getDriverExpenseAdvances({ driverId }),
+    enabled: isAuthenticated && !authLoading && !!driverId,
+  });
+
+  const driverAdvanceMutation = useMutation({
+    mutationFn: createDriverExpenseAdvance,
+    onSuccess: () => {
+      toast({ title: 'Đã gửi yêu cầu', description: 'Tạm ứng phí sẽ được kế toán xem xét' });
+      setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
+      queryClient.invalidateQueries({ queryKey: ['driver-expense-advances', driverId] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Không thể gửi yêu cầu',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    },
+  });
+  const openFinanceDialog = () => setFinanceDialogOpen(true);
 
   // Filter trips for this driver
   const myTrips = allTrips.filter(trip => 
@@ -39,6 +100,20 @@ const DriverDashboard = () => {
     inProgress: myTrips.filter(t => t.status === 'Đang đi' || t.status === 'Đang đón').length,
     upcoming: myTrips.filter(t => t.status === 'Đã phân xe').length,
   };
+
+  const driverAdvances = driverAdvancesQ.data ?? [];
+  const outstandingAdvance = useMemo(
+    () => driverAdvances
+      .filter((advance) => advance.status === 'approved')
+      .reduce((sum, advance) => sum + advance.amount, 0),
+    [driverAdvances],
+  );
+  const pendingAdvance = useMemo(
+    () => driverAdvances
+      .filter((advance) => advance.status === 'requested')
+      .reduce((sum, advance) => sum + advance.amount, 0),
+    [driverAdvances],
+  );
 
   const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
 
@@ -73,6 +148,113 @@ const DriverDashboard = () => {
           <h1 className="text-2xl font-bold text-gray-800">Lịch Trình Của Tôi</h1>
           <p className="text-sm text-muted-foreground">Xem và quản lý các chuyến đi được phân công</p>
         </div>
+        <Dialog open={financeDialogOpen} onOpenChange={setFinanceDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="gap-2" onClick={openFinanceDialog}>
+              <Wallet size={18} />
+              Đề nghị tạm ứng
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Đề nghị tạm ứng phí tài xế</DialogTitle>
+            </DialogHeader>
+                <form
+                  className="space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!driverId) {
+                      toast({
+                        title: 'Không thể xác định tài khoản',
+                        description: 'Vui lòng đăng nhập lại',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    const amount = Number(driverAdvanceForm.amount || 0);
+                    if (!amount || amount <= 0) {
+                      toast({
+                        title: 'Số tiền không hợp lệ',
+                        description: 'Nhập số tiền tạm ứng lớn hơn 0',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    driverAdvanceMutation.mutate({
+                      driverId,
+                      amount,
+                      expenseType: driverAdvanceForm.expenseType,
+                      tripId: driverAdvanceForm.tripId.trim() || undefined,
+                      requestedBy: driverId,
+                      note: driverAdvanceForm.note.trim() || undefined,
+                    });
+                  }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="driver-finance-request-amount">Số tiền (₫) *</Label>
+                      <Input
+                        id="driver-finance-request-amount"
+                        type="number"
+                        min={0}
+                        placeholder="VD: 150000"
+                        value={driverAdvanceForm.amount}
+                        onChange={(event) =>
+                          setDriverAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Loại chi phí *</Label>
+                      <Select
+                        value={driverAdvanceForm.expenseType}
+                        onValueChange={(value) =>
+                          setDriverAdvanceForm((prev) => ({ ...prev, expenseType: value as DriverExpenseType }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="toll">Phí cầu đường</SelectItem>
+                          <SelectItem value="parking">Phí bến bãi</SelectItem>
+                          <SelectItem value="fuel">Nhiên liệu</SelectItem>
+                          <SelectItem value="other">Khác</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="driver-finance-request-trip">Mã chuyến liên quan</Label>
+                      <Input
+                        id="driver-finance-request-trip"
+                        placeholder="VD: 123"
+                        value={driverAdvanceForm.tripId}
+                        onChange={(event) =>
+                          setDriverAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="driver-finance-request-note">Ghi chú kèm chứng từ</Label>
+                    <Textarea
+                      id="driver-finance-request-note"
+                      rows={3}
+                      placeholder="Ví dụ: phí cầu Phú Mỹ - có hóa đơn"
+                      value={driverAdvanceForm.note}
+                      onChange={(event) =>
+                        setDriverAdvanceForm((prev) => ({ ...prev, note: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={driverAdvanceMutation.isPending} className="min-w-32">
+                      {driverAdvanceMutation.isPending ? 'Đang gửi...' : 'Gửi yêu cầu'}
+                    </Button>
+                  </div>
+                </form>
+          </DialogContent>
+        </Dialog>
       </header>
 
       <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
@@ -103,6 +285,18 @@ const DriverDashboard = () => {
                 <p className="text-3xl font-bold text-gray-600">{stats.completed}</p>
               </CardContent>
             </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground mb-1">Tạm ứng đã duyệt</p>
+                <p className="text-3xl font-bold text-amber-600">{formatCurrency(outstandingAdvance)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground mb-1">Tạm ứng đang chờ</p>
+                <p className="text-3xl font-bold text-purple-600">{formatCurrency(pendingAdvance)}</p>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Date Filter */}
@@ -120,6 +314,57 @@ const DriverDashboard = () => {
                   Hiển thị {sortedTrips.length} chuyến trong ngày
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="px-6 py-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">Lịch sử tạm ứng của tôi</h2>
+                <p className="text-sm text-muted-foreground">Theo dõi trạng thái phê duyệt và khấu trừ</p>
+              </div>
+              {driverAdvancesQ.isLoading ? (
+                <div className="p-6 text-center text-muted-foreground">Đang tải danh sách tạm ứng...</div>
+              ) : driverAdvances.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">Bạn chưa có yêu cầu tạm ứng nào</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-left">
+                      <tr>
+                        <th className="px-6 py-3 font-medium text-muted-foreground">Thời gian</th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground">Loại phí</th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground text-right">Số tiền</th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground">Trạng thái</th>
+                        <th className="px-6 py-3 font-medium text-muted-foreground">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driverAdvances.map((advance) => (
+                        <tr key={advance.id} className="border-t">
+                          <td className="px-6 py-3">{new Date(advance.requestedAt).toLocaleString('vi-VN')}</td>
+                          <td className="px-6 py-3">{driverExpenseLabels[advance.expenseType]}</td>
+                          <td className="px-6 py-3 text-right font-medium text-gray-900">{advance.amount.toLocaleString('vi-VN')} ₫</td>
+                          <td className="px-6 py-3">
+                            <Badge variant={driverStatusVariants[advance.status]}>{driverStatusLabels[advance.status]}</Badge>
+                          </td>
+                          <td className="px-6 py-3">
+                            <div className="flex flex-col gap-1">
+                              {advance.note && <span>{advance.note}</span>}
+                              {advance.rejectionReason && (
+                                <span className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</span>
+                              )}
+                              {advance.tripId && (
+                                <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
 
