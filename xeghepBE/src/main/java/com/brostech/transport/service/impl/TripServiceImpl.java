@@ -4,8 +4,10 @@ import com.brostech.transport.dto.payment.TripPaymentRequest;
 import com.brostech.transport.dto.trip.TripDTO;
 import com.brostech.transport.dto.trip.TripRequest;
 import com.brostech.transport.jpa.entity.Customer;
+import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripPayment;
+import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.jpa.repository.CustomerRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
@@ -25,6 +27,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Arrays;
 
 /**
  * TripServiceImpl
@@ -45,6 +48,7 @@ public class TripServiceImpl implements TripService {
     private final VehicleRepository vehicleRepository;
     private final TripPaymentRepository tripPaymentRepository;
     private final PaymentService paymentService;
+    private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -290,6 +294,19 @@ public class TripServiceImpl implements TripService {
      * Map entity Trip sang TripDTO với đầy đủ thông tin.
      */
     private TripDTO toDTO(Trip trip) {
+        double reconciled = 0d;
+        double pending = 0d;
+        if (trip.getId() != null) {
+            reconciled = safeSum(customerAdvancePaymentRepository
+                    .sumAmountByTripIdAndStatus(trip.getId(), CustomerAdvancePayment.Status.RECONCILED));
+            pending = safeSum(customerAdvancePaymentRepository
+                    .sumAmountByTripIdAndStatuses(trip.getId(), Arrays.asList(
+                            CustomerAdvancePayment.Status.PENDING,
+                            CustomerAdvancePayment.Status.SUBMITTED
+                    )));
+        }
+        double price = trip.getPrice() != null ? trip.getPrice().doubleValue() : 0d;
+        double outstanding = Math.max(price - reconciled, 0d);
         return TripDTO.builder()
                 .id(trip.getId())
                 .vehicleId(trip.getVehicleId())
@@ -320,12 +337,19 @@ public class TripServiceImpl implements TripService {
                 .pickupConfirmed(trip.getPickupConfirmed())
                 .dropoffConfirmed(trip.getDropoffConfirmed())
                 .groupId(trip.getGroupId())
+                .customerAdvanceReconciled(reconciled)
+                .customerAdvancePending(pending)
+                .customerOutstandingAmount(outstanding)
                 .build();
     }
     
     private String formatDate(Date date) {
         if (date == null) return null;
         return dateFormat.format(date);
+    }
+
+    private double safeSum(Double value) {
+        return value != null ? value : 0d;
     }
 
     private void autoRecordDriverCollection(Trip trip, Trip.TripStatus previousStatus) {

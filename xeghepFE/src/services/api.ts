@@ -168,6 +168,9 @@ export interface TripResponse {
   dropoffTime: string | null;
   distance: number | null;
   price: number;
+  customerAdvanceReconciled: number | null;
+  customerAdvancePending: number | null;
+  customerOutstandingAmount: number | null;
   status: TripStatus;
   passengers: number;
   notes: string | null;

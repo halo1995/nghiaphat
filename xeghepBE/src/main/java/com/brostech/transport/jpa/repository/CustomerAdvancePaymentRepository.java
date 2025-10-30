@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 public interface CustomerAdvancePaymentRepository extends JpaRepository<CustomerAdvancePayment, Long> {
 
     Page<CustomerAdvancePayment> findByStatus(CustomerAdvancePayment.Status status, Pageable pageable);
@@ -19,4 +22,10 @@ public interface CustomerAdvancePaymentRepository extends JpaRepository<Customer
     List<CustomerAdvancePayment> findByStatus(CustomerAdvancePayment.Status status);
 
     List<CustomerAdvancePayment> findByStatusIn(Collection<CustomerAdvancePayment.Status> statuses);
+
+    @Query("select coalesce(sum(c.amount), 0) from CustomerAdvancePayment c where c.tripId = :tripId and c.status = :status")
+    Double sumAmountByTripIdAndStatus(@Param("tripId") Long tripId, @Param("status") CustomerAdvancePayment.Status status);
+
+    @Query("select coalesce(sum(c.amount), 0) from CustomerAdvancePayment c where c.tripId = :tripId and c.status in :statuses")
+    Double sumAmountByTripIdAndStatuses(@Param("tripId") Long tripId, @Param("statuses") Collection<CustomerAdvancePayment.Status> statuses);
 }

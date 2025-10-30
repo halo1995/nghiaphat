@@ -38,4 +38,7 @@ public class TripDTO {
     private Boolean pickupConfirmed;
     private Boolean dropoffConfirmed;
     private String groupId;
+    private Double customerAdvanceReconciled;
+    private Double customerAdvancePending;
+    private Double customerOutstandingAmount;
 }

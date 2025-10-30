@@ -387,15 +387,20 @@ const DriverDashboard = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {sortedTrips.map((trip, index) => (
-                <motion.div
-                  key={trip.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
+              {sortedTrips.map((trip, index) => {
+                const reconciledAmount = trip.customerAdvanceReconciled ?? 0;
+                const pendingAmount = trip.customerAdvancePending ?? 0;
+                const amountToCollect = trip.customerOutstandingAmount ?? Math.max(trip.price - reconciledAmount, 0);
+
+                return (
+                  <motion.div
+                    key={trip.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardContent className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className="bg-blue-100 p-3 rounded-lg">
@@ -442,10 +447,24 @@ const DriverDashboard = () => {
                           <span>📏 {trip.distance} km</span>
                           <span className="font-semibold text-gray-800">{trip.customerName}</span>
                           <span>{trip.customerPhone}</span>
-                          <span className="flex items-center gap-1 text-amber-600 font-semibold">
-                            <Wallet size={16} />
-                            Thu khách: {formatCurrency(trip.price)}
-                          </span>
+                          <div className="flex flex-col">
+                            <span
+                              className={`flex items-center gap-1 font-semibold ${
+                                amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'
+                              }`}
+                            >
+                              <Wallet size={16} />
+                              {reconciledAmount > 0
+                                ? `Cần thu khách: ${formatCurrency(amountToCollect)}`
+                                : `Thu khách: ${formatCurrency(trip.price)}`}
+                            </span>
+                            {reconciledAmount > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Đã đối soát: {formatCurrency(reconciledAmount)}
+                                {pendingAmount > 0 && ` • Chờ đối soát: ${formatCurrency(pendingAmount)}`}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {trip.status === 'Đã phân xe' && (
@@ -483,8 +502,9 @@ const DriverDashboard = () => {
                       )}
                     </CardContent>
                   </Card>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -20,7 +20,8 @@ import { DatePickerField } from '@/components/ui/date-picker-field';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
-import { createCustomerAdvance, type CustomerAdvanceMethod } from '@/data/accounting';
+import { Badge } from '@/components/ui/badge';
+import { createCustomerAdvance, getCustomerAdvances, type CustomerAdvanceMethod, type CustomerAdvancePayment, type CustomerAdvanceStatus } from '@/data/accounting';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -28,6 +29,36 @@ const getTodayLocalDate = () => {
   const local = new Date(now.getTime() - offset * 60000);
   return local.toISOString().slice(0, 10);
 };
+
+const customerAdvanceStatusLabels: Record<CustomerAdvanceStatus, string> = {
+  pending: 'Chờ đối soát',
+  submitted: 'Đã gửi kế toán',
+  reconciled: 'Đã đối soát',
+  rejected: 'Từ chối',
+};
+
+const customerAdvanceStatusVariants: Record<CustomerAdvanceStatus, 'outline' | 'secondary' | 'default' | 'destructive'> = {
+  pending: 'outline',
+  submitted: 'secondary',
+  reconciled: 'default',
+  rejected: 'destructive',
+};
+
+const methodLabels: Record<CustomerAdvanceMethod, string> = {
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản',
+};
+
+const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
+
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 
 const CallCenter = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,11 +83,32 @@ const CallCenter = () => {
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
 
+  const role = user?.role ? user.role.toString().toLowerCase() : undefined;
+  const allowCustomerFinance = role === 'call_center' || role === 'admin';
+
   const { data: trips = [], isLoading } = useQuery({
     queryKey: ['trips'],
     queryFn: getTrips,
     enabled: isAuthenticated && !authLoading,
   });
+
+  const customerAdvancesQuery = useQuery({
+    queryKey: ['customer-advances', allowCustomerFinance],
+    queryFn: () => getCustomerAdvances({ size: 500 }),
+    enabled: (allowCustomerFinance ?? false) && isAuthenticated && !authLoading,
+  });
+
+  const customerAdvancesByTrip = useMemo(() => {
+    const map = new Map<string, CustomerAdvancePayment[]>();
+    if (!customerAdvancesQuery.data) return map;
+    for (const advance of customerAdvancesQuery.data) {
+      if (!advance.tripId) continue;
+      const list = map.get(advance.tripId) ?? [];
+      list.push(advance);
+      map.set(advance.tripId, list);
+    }
+    return map;
+  }, [customerAdvancesQuery.data]);
 
   const provinces = useMemo(() => getProvinces(), []);
   const [pickupProvinceCode, setPickupProvinceCode] = useState('');
@@ -77,6 +129,7 @@ const CallCenter = () => {
     note: '',
   });
   const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
+  const [selectedTripForAdvance, setSelectedTripForAdvance] = useState<Trip | null>(null);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Trip> }) => updateTrip(id, data),
@@ -129,6 +182,8 @@ const CallCenter = () => {
         note: '',
       });
       queryClient.invalidateQueries({ queryKey: ['customer-advances'] });
+      setFinanceDialogOpen(false);
+      setSelectedTripForAdvance(null);
     },
     onError: (error: unknown) => {
       toast({
@@ -443,8 +498,7 @@ const CallCenter = () => {
     );
   }
 
-  const role = user?.role ? user.role.toString().toLowerCase() : undefined;
-  const allowCustomerFinance = role === 'call_center' || role === 'admin';
+  
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -456,9 +510,41 @@ const CallCenter = () => {
         </div>
         <div className="flex items-center gap-3">
           {allowCustomerFinance && (
-            <Dialog open={financeDialogOpen} onOpenChange={setFinanceDialogOpen}>
+            <Dialog
+              open={financeDialogOpen}
+              onOpenChange={(open) => {
+                setFinanceDialogOpen(open);
+                if (!open) {
+                  setSelectedTripForAdvance(null);
+                  setCustomerAdvanceForm({
+                    tripId: '',
+                    customerName: '',
+                    customerPhone: '',
+                    amount: '',
+                    method: 'cash',
+                    receiptCode: '',
+                    note: '',
+                  });
+                }
+              }}
+            >
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    setSelectedTripForAdvance(null);
+                    setCustomerAdvanceForm({
+                      tripId: '',
+                      customerName: '',
+                      customerPhone: '',
+                      amount: '',
+                      method: 'cash',
+                      receiptCode: '',
+                      note: '',
+                    });
+                  }}
+                >
                   <Wallet size={18} />
                   Ghi nhận ứng trước
                 </Button>
@@ -467,6 +553,18 @@ const CallCenter = () => {
                 <DialogHeader>
                   <DialogTitle>Ghi nhận ứng trước của khách</DialogTitle>
                 </DialogHeader>
+                {selectedTripForAdvance && (
+                  <div className="border rounded-lg bg-muted/40 px-4 py-3 space-y-1 text-sm text-gray-700">
+                    <div className="font-semibold text-gray-900">Chuyến #{selectedTripForAdvance.id}</div>
+                    <div>
+                      {selectedTripForAdvance.customerName} • {selectedTripForAdvance.customerPhone}
+                    </div>
+                    <div>
+                      {selectedTripForAdvance.pickupLocation} → {selectedTripForAdvance.dropoffLocation}
+                    </div>
+                    <div>Giá cước: {formatCurrency(selectedTripForAdvance.price)}</div>
+                  </div>
+                )}
                   <form
                     className="space-y-4"
                     onSubmit={(event) => {
@@ -672,6 +770,19 @@ const CallCenter = () => {
           ) : (
             <div className="grid grid-cols-1 gap-4">
               {filteredTrips.map((trip, index) => {
+                const advancesForTrip = customerAdvancesByTrip.get(trip.id) ?? [];
+                const reconciledFromTrip = trip.customerAdvanceReconciled ?? 0;
+                const pendingFromTrip = trip.customerAdvancePending ?? 0;
+                const totalReconciled = advancesForTrip.length > 0
+                  ? advancesForTrip.filter((advance) => advance.status === 'reconciled').reduce((sum, advance) => sum + advance.amount, 0)
+                  : reconciledFromTrip;
+                const totalPending = advancesForTrip.length > 0
+                  ? advancesForTrip.filter((advance) => advance.status !== 'reconciled').reduce((sum, advance) => sum + advance.amount, 0)
+                  : pendingFromTrip;
+                const totalAdvance = totalReconciled + totalPending;
+                const outstandingAmount = trip.customerOutstandingAmount ?? Math.max(trip.price - totalReconciled, 0);
+                const hasAwaitingReconcile = totalPending > 0;
+
                 const isEditable = !['Đang đón', 'Đang đi', 'Hoàn thành'].includes(trip.status);
 
                 return (
@@ -681,124 +792,220 @@ const CallCenter = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
                   >
-                  <Card className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row gap-4">
-                        {/* Left: Customer & Trip Info */}
-                        <div className="flex-1 space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                <Phone size={18} className="text-green-600" />
-                                {trip.customerName}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">{trip.customerPhone}</p>
-                            </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[trip.status]}`}>
-                              {trip.status}
-                            </span>
+                    <Card className="hover:shadow-lg transition-shadow">
+                      <CardContent className="p-6 space-y-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                              <Phone size={18} className="text-green-600" />
+                              {trip.customerName}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">{trip.customerPhone}</p>
                           </div>
-
-                          <div className="space-y-2">
-                            <div className="flex items-start gap-2">
-                              <MapPin className="text-green-600 mt-1 flex-shrink-0" size={16} />
-                              <div>
-                                <p className="text-sm font-medium text-gray-700">Điểm đón</p>
-                                <p className="text-sm text-gray-600">{trip.pickupLocation}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <MapPin className="text-red-600 mt-1 flex-shrink-0" size={16} />
-                              <div>
-                                <p className="text-sm font-medium text-gray-700">Điểm trả</p>
-                                <p className="text-sm text-gray-600">{trip.dropoffLocation}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <CalendarIcon size={14} />
-                              {new Date(trip.pickupTime).toLocaleString('vi-VN')}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Users size={14} />
-                              {trip.passengers} người
-                            </span>
-                            <span>📏 {trip.distance} km</span>
-                          </div>
-
-                          {trip.notes && (
-                            <div className="pt-2 border-t">
-                              <p className="text-sm text-gray-600">
-                                <span className="font-medium">Ghi chú:</span> {trip.notes}
-                              </p>
-                            </div>
-                          )}
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[trip.status]}`}>
+                            {trip.status}
+                          </span>
                         </div>
 
-                        {/* Right: Price & Actions */}
-                        <div className="md:w-56 flex md:flex-col justify-between md:justify-start gap-4">
-                          <div className="text-center md:text-right">
-                            <p className="text-sm text-muted-foreground mb-1">Giá cước</p>
-                            <p className="text-2xl font-bold text-green-600">
-                              {trip.price.toLocaleString('vi-VN')} ₫
-                            </p>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="flex-1 space-y-4">
+                            <div className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <MapPin className="text-green-600 mt-1 flex-shrink-0" size={16} />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700">Điểm đón</p>
+                                  <p className="text-sm text-gray-600">{trip.pickupLocation}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <MapPin className="text-red-600 mt-1 flex-shrink-0" size={16} />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700">Điểm trả</p>
+                                  <p className="text-sm text-gray-600">{trip.dropoffLocation}</p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <CalendarIcon size={14} />
+                                {new Date(trip.pickupTime).toLocaleString('vi-VN')}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Users size={14} />
+                                {trip.passengers} người
+                              </span>
+                              <span>📏 {trip.distance} km</span>
+                            </div>
+
+                            {advancesForTrip.length > 0 ? (
+                              <div className="pt-3 border-t space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-700">Ứng trước của khách</p>
+                                    {hasAwaitingReconcile && (
+                                      <p className="text-xs text-amber-600 mt-0.5">
+                                        Chờ đối soát {formatCurrency(totalPending)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-semibold text-emerald-600">
+                                    {formatCurrency(totalAdvance)}
+                                  </p>
+                                </div>
+                                <div className="space-y-2">
+                                  {advancesForTrip.map((advance) => (
+                                    <div key={advance.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                      <div className="text-sm text-gray-600">
+                                        <p className="font-medium text-gray-700">
+                                          {methodLabels[advance.method]}
+                                        </p>
+                                        <p>{formatDateTime(advance.collectedAt)}</p>
+                                        {advance.note && (
+                                          <p className="text-xs text-muted-foreground mt-0.5">{advance.note}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-3 justify-between sm:justify-end">
+                                        <Badge variant={customerAdvanceStatusVariants[advance.status]}>
+                                          {customerAdvanceStatusLabels[advance.status]}
+                                        </Badge>
+                                        <span className="text-sm font-semibold text-gray-800">
+                                          {formatCurrency(advance.amount)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (totalAdvance > 0 && (
+                              <div className="pt-3 border-t text-sm text-gray-600">
+                                <p className="font-medium text-gray-700 mb-1">Ứng trước của khách</p>
+                                <p className="text-emerald-600">Tổng ứng: {formatCurrency(totalAdvance)}</p>
+                                {hasAwaitingReconcile && (
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    Chờ đối soát {formatCurrency(totalPending)}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+
+                            {trip.notes && (
+                              <div className="pt-2 border-t">
+                                <p className="text-sm text-gray-600">
+                                  <span className="font-medium">Ghi chú:</span> {trip.notes}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
-                          {trip.status === 'Chờ xác nhận' && (
-                            <div className="flex md:flex-col gap-2">
+                          <div className="w-full lg:w-64 space-y-3">
+                            <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm text-gray-700">
+                              <div className="flex items-center justify-between">
+                                <span>Giá cước</span>
+                                <span className="text-base font-semibold text-green-600">
+                                  {formatCurrency(trip.price)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span>Đã đối soát</span>
+                                <span className="font-medium text-emerald-600">
+                                  {formatCurrency(totalReconciled)}
+                                </span>
+                              </div>
+                              {hasAwaitingReconcile && (
+                                <div className="flex items-center justify-between text-amber-600">
+                                  <span>Chờ đối soát</span>
+                                  <span>{formatCurrency(totalPending)}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span>Cần thu khách</span>
+                                <span className={`font-semibold ${outstandingAmount > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                                  {outstandingAmount > 0
+                                    ? formatCurrency(outstandingAmount)
+                                    : 'Đã thu đủ'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {allowCustomerFinance && (
                               <Button
-                                onClick={() => handleConfirm(trip.id)}
-                                className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                                variant="secondary"
                                 size="sm"
+                                className="w-full"
+                                onClick={() => {
+                                  setSelectedTripForAdvance(trip);
+                                  setCustomerAdvanceForm({
+                                    tripId: trip.id,
+                                    customerName: trip.customerName,
+                                    customerPhone: trip.customerPhone,
+                                    amount: '',
+                                    method: 'cash',
+                                    receiptCode: '',
+                                    note: '',
+                                  });
+                                  setFinanceDialogOpen(true);
+                                }}
                               >
-                                <CheckCircle size={16} />
-                                Xác nhận
+                                Ghi nhận ứng trước
                               </Button>
+                            )}
+
+                            <div className="space-y-2">
+                              {trip.status === 'Chờ xác nhận' && (
+                                <div className="flex flex-col gap-2">
+                                  <Button
+                                    onClick={() => handleConfirm(trip.id)}
+                                    className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                                    size="sm"
+                                  >
+                                    <CheckCircle size={16} />
+                                    Xác nhận
+                                  </Button>
+                                  <Button
+                                    onClick={() => handleCancel(trip.id)}
+                                    variant="destructive"
+                                    className="w-full gap-2"
+                                    size="sm"
+                                  >
+                                    <XCircle size={16} />
+                                    Hủy
+                                  </Button>
+                                </div>
+                              )}
+
+                              {trip.status === 'Đã xác nhận' && (
+                                <Button
+                                  onClick={() => handleCancel(trip.id)}
+                                  variant="outline"
+                                  className="w-full gap-2"
+                                  size="sm"
+                                >
+                                  <XCircle size={16} />
+                                  Hủy chuyến
+                                </Button>
+                              )}
+
                               <Button
-                                onClick={() => handleCancel(trip.id)}
-                                variant="destructive"
-                                className="flex-1 gap-2"
+                                onClick={() => handleOpenSchedule(trip)}
+                                variant="secondary"
+                                className="w-full gap-2"
                                 size="sm"
+                                disabled={!isEditable}
+                                title={
+                                  !isEditable
+                                    ? 'Không thể chỉnh sửa khi chuyến đang đón, đang đi hoặc đã hoàn thành'
+                                    : undefined
+                                }
                               >
-                                <XCircle size={16} />
-                                Hủy
+                                <Clock size={16} />
+                                Chỉnh sửa lịch
                               </Button>
                             </div>
-                          )}
-
-                          {trip.status === 'Đã xác nhận' && (
-                            <Button
-                              onClick={() => handleCancel(trip.id)}
-                              variant="outline"
-                              className="gap-2"
-                              size="sm"
-                            >
-                              <XCircle size={16} />
-                              Hủy chuyến
-                            </Button>
-                          )}
-
-                          <Button
-                            onClick={() => handleOpenSchedule(trip)}
-                            variant="secondary"
-                            className="gap-2"
-                            size="sm"
-                            disabled={!isEditable}
-                            title={
-                              !isEditable
-                                ? 'Không thể chỉnh sửa khi chuyến đang đón, đang đi hoặc đã hoàn thành'
-                                : undefined
-                            }
-                          >
-                            <Clock size={16} />
-                            Chỉnh sửa lịch
-                          </Button>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
                   </motion.div>
                 );
               })}

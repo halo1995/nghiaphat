@@ -24,6 +24,9 @@ export interface Trip {
   dropoffTime?: string;
   distance: number;
   price: number;
+  customerAdvanceReconciled?: number;
+  customerAdvancePending?: number;
+  customerOutstandingAmount?: number;
   status: 'Chờ xác nhận' | 'Đã xác nhận' | 'Đã ghép chuyến' | 'Đã phân xe' | 'Đang đón' | 'Đang đi' | 'Hoàn thành' | 'Đã hủy';
   passengers: number;
   notes?: string;
@@ -113,6 +116,9 @@ const mapTripResponse = (trip: TripResponse): Trip => ({
   dropoffTime: toFrontendDate(trip.dropoffTime) ?? undefined,
   distance: trip.distance ?? 0,
   price: Number(trip.price ?? 0),
+  customerAdvanceReconciled: trip.customerAdvanceReconciled ?? 0,
+  customerAdvancePending: trip.customerAdvancePending ?? 0,
+  customerOutstandingAmount: trip.customerOutstandingAmount ?? undefined,
   status: STATUS_BACKEND_TO_FRONT[trip.status],
   passengers: trip.passengers,
   notes: trip.notes ?? undefined,
