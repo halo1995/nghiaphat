@@ -387,11 +387,14 @@ const CreateBooking = () => {
                             <SelectValue placeholder="Chọn phường/xã" />
                           </SelectTrigger>
                           <SelectContent>
-                            {pickupWardOptions.map(option => (
-                              <SelectItem key={option.code} value={option.code}>
-                                {option.name} ({option.district.name})
-                              </SelectItem>
-                            ))}
+                            {pickupWardOptions
+                              .filter(option => option.code)
+                              .map(option => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  {option.name}
+                                  {option.district?.name ? ` (${option.district.name})` : ''}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -426,11 +429,14 @@ const CreateBooking = () => {
                             <SelectValue placeholder="Chọn phường/xã" />
                           </SelectTrigger>
                           <SelectContent>
-                            {dropoffWardOptions.map(option => (
-                              <SelectItem key={option.code} value={option.code}>
-                                {option.name} ({option.district.name})
-                              </SelectItem>
-                            ))}
+                            {dropoffWardOptions
+                              .filter(option => option.code)
+                              .map(option => (
+                                <SelectItem key={option.code} value={option.code}>
+                                  {option.name}
+                                  {option.district?.name ? ` (${option.district.name})` : ''}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
