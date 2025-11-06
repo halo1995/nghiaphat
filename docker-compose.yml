@@ -1,5 +1,3 @@
-version: "3.8" 
- 
 services:
   backend:
     build:
@@ -18,6 +16,7 @@ services:
       - app-network
     volumes:
       - backend_logs:/app/logs
+      - ticket_images:/app/data/ticket-images
     restart: unless-stopped
     mem_limit: 1024m     # NOTE: Thay cho deploy.resources.memory
     cpus: 1           # NOTE: Thay cho deploy.resources.cpus
@@ -64,4 +63,6 @@ volumes:
   postgres_data:
     # NOTE: Bỏ external:true -> để docker-compose tự tạo volume
   backend_logs:
+    driver: local
+  ticket_images:
     driver: local

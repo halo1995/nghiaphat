@@ -3,6 +3,7 @@ import type {
   AccountingSummaryResponse,
   DepositRecordResponse,
   TripPaymentResponse,
+  PaymentAttachmentResponse,
   PaymentMethod as ApiPaymentMethod,
   CustomerAdvancePaymentResponse,
   CustomerAdvancePaymentRequest as ApiCustomerAdvancePaymentRequest,
@@ -18,6 +19,16 @@ import type {
 
 export type PaymentMethod = 'cash' | 'transfer';
 
+export interface PaymentAttachment {
+  id: string;
+  fileName: string;
+  contentType?: string;
+  sizeBytes: number;
+  createdAt: string;
+  expiresAt?: string;
+  downloadUrl: string;
+}
+
 export interface TripPayment {
   id: string;
   tripId: string;
@@ -25,6 +36,7 @@ export interface TripPayment {
   amount: number;
   method: PaymentMethod;
   collectedAt: string;
+  attachments: PaymentAttachment[];
 }
 
 export interface DepositRecord {
@@ -33,6 +45,7 @@ export interface DepositRecord {
   amount: number;
   createdAt: string;
   note?: string;
+  attachments: PaymentAttachment[];
 }
 
 export interface RevenueSummary {
@@ -73,6 +86,7 @@ export interface CustomerAdvancePayment {
   reconciledAt?: string;
   receiptCode?: string;
   note?: string;
+  attachments: PaymentAttachment[];
 }
 
 export type DriverExpenseStatus = 'requested' | 'approved' | 'deducted' | 'rejected';
@@ -93,6 +107,7 @@ export interface DriverExpenseAdvance {
   deductedAt?: string;
   rejectionReason?: string;
   note?: string;
+  attachments: PaymentAttachment[];
 }
 
 const METHOD_TO_FRONT: Record<ApiPaymentMethod, PaymentMethod> = {
@@ -105,6 +120,16 @@ const METHOD_TO_BACK: Record<PaymentMethod, ApiPaymentMethod> = {
   transfer: 'TRANSFER',
 };
 
+const mapAttachment = (attachment: PaymentAttachmentResponse): PaymentAttachment => ({
+  id: attachment.id.toString(),
+  fileName: attachment.fileName,
+  contentType: attachment.contentType ?? undefined,
+  sizeBytes: attachment.sizeBytes,
+  createdAt: attachment.createdAt,
+  expiresAt: attachment.expiresAt ?? undefined,
+  downloadUrl: attachment.downloadUrl,
+});
+
 const mapTripPayment = (payment: TripPaymentResponse): TripPayment => ({
   id: payment.id.toString(),
   tripId: payment.tripId.toString(),
@@ -112,6 +137,7 @@ const mapTripPayment = (payment: TripPaymentResponse): TripPayment => ({
   amount: payment.amount,
   method: METHOD_TO_FRONT[payment.method],
   collectedAt: payment.collectedAt,
+  attachments: (payment.attachments ?? []).map(mapAttachment),
 });
 
 const mapDepositRecord = (record: DepositRecordResponse): DepositRecord => ({
@@ -120,6 +146,7 @@ const mapDepositRecord = (record: DepositRecordResponse): DepositRecord => ({
   amount: record.amount,
   createdAt: record.createdAt,
   note: record.note ?? undefined,
+  attachments: (record.attachments ?? []).map(mapAttachment),
 });
 
 const CUSTOMER_METHOD_TO_FRONT: Record<ApiCustomerAdvanceMethod, CustomerAdvanceMethod> = {
@@ -190,6 +217,7 @@ const mapCustomerAdvance = (advance: CustomerAdvancePaymentResponse): CustomerAd
   reconciledAt: advance.reconciledAt ?? undefined,
   receiptCode: advance.receiptCode ?? undefined,
   note: advance.note ?? undefined,
+  attachments: (advance.attachments ?? []).map(mapAttachment),
 });
 
 const mapDriverAdvance = (advance: DriverExpenseAdvanceResponse): DriverExpenseAdvance => ({
@@ -207,6 +235,7 @@ const mapDriverAdvance = (advance: DriverExpenseAdvanceResponse): DriverExpenseA
   deductedAt: advance.deductedAt ?? undefined,
   rejectionReason: advance.rejectionReason ?? undefined,
   note: advance.note ?? undefined,
+  attachments: (advance.attachments ?? []).map(mapAttachment),
 });
 
 const toSummary = (summary: AccountingSummaryResponse): RevenueSummary => ({
@@ -251,6 +280,7 @@ export const recordTripPayment = async (input: {
   driverId: string;
   amount: number;
   method: PaymentMethod;
+  attachments?: File[];
 }): Promise<TripPayment> => {
   const request = {
     tripId: Number(input.tripId),
@@ -258,7 +288,7 @@ export const recordTripPayment = async (input: {
     amount: input.amount,
     method: METHOD_TO_BACK[input.method],
   };
-  const response = await apiService.createTripPayment(request);
+  const response = await apiService.createTripPayment(request, input.attachments ?? []);
   return mapTripPayment(response);
 };
 
@@ -266,13 +296,14 @@ export const createDeposit = async (input: {
   driverId: string;
   amount: number;
   note?: string;
+  attachments?: File[];
 }): Promise<DepositRecord> => {
   const request = {
     driverId: Number(input.driverId),
     amount: input.amount,
     note: input.note,
   };
-  const response = await apiService.createDepositRecord(request);
+  const response = await apiService.createDepositRecord(request, input.attachments ?? []);
   return mapDepositRecord(response);
 };
 
@@ -311,6 +342,7 @@ export const createCustomerAdvance = async (input: {
   collectedBy?: string;
   receiptCode?: string;
   note?: string;
+  attachments?: File[];
 }): Promise<CustomerAdvancePayment> => {
   const request: ApiCustomerAdvancePaymentRequest = {
     tripId: input.tripId ? Number(input.tripId) : undefined,
@@ -322,7 +354,7 @@ export const createCustomerAdvance = async (input: {
     receiptCode: input.receiptCode,
     note: input.note,
   };
-  const response = await apiService.createCustomerAdvancePayment(request);
+  const response = await apiService.createCustomerAdvancePayment(request, input.attachments ?? []);
   return mapCustomerAdvance(response);
 };
 
@@ -363,6 +395,7 @@ export const createDriverExpenseAdvance = async (input: {
   expenseType: DriverExpenseType;
   requestedBy?: string;
   note?: string;
+  attachments?: File[];
 }): Promise<DriverExpenseAdvance> => {
   const request: ApiDriverExpenseAdvanceRequest = {
     driverId: Number(input.driverId),
@@ -372,7 +405,7 @@ export const createDriverExpenseAdvance = async (input: {
     requestedBy: input.requestedBy ? Number(input.requestedBy) : undefined,
     note: input.note,
   };
-  const response = await apiService.createDriverExpenseAdvance(request);
+  const response = await apiService.createDriverExpenseAdvance(request, input.attachments ?? []);
   return mapDriverAdvance(response);
 };
 

@@ -10,11 +10,13 @@ import com.brostech.transport.dto.payment.DriverAccountingSummaryDTO;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceDTO;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceRequest;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
+import com.brostech.transport.dto.payment.PaymentAttachmentDTO;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
 import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.DepositRecord;
 import com.brostech.transport.jpa.entity.DriverExpenseAdvance;
+import com.brostech.transport.jpa.entity.PaymentAttachment;
 import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripPayment;
 import com.brostech.transport.jpa.entity.User;
@@ -24,6 +26,7 @@ import com.brostech.transport.jpa.repository.DriverExpenseAdvanceRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.UserRepository;
+import com.brostech.transport.service.PaymentAttachmentService;
 import com.brostech.transport.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,10 +35,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -62,13 +68,14 @@ public class PaymentServiceImpl implements PaymentService {
     private final DriverExpenseAdvanceRepository driverExpenseAdvanceRepository;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
+    private final PaymentAttachmentService attachmentService;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     // Trip Payments
 
     @Override
-    public TripPaymentDTO createTripPayment(TripPaymentRequest req) {
+    public TripPaymentDTO createTripPayment(TripPaymentRequest req, List<MultipartFile> attachments) {
         // Validate driver and trip exist
         User driver = userRepository.findByIdAndRole(req.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
@@ -90,6 +97,8 @@ public class PaymentServiceImpl implements PaymentService {
         double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
         driver.setTotalEarnings(currentEarnings + req.getAmount());
         userRepository.save(driver);
+        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, payment.getId(),
+                attachments == null ? Collections.emptyList() : attachments);
         return toTripPaymentDTO(payment);
     }
 
@@ -115,6 +124,7 @@ public class PaymentServiceImpl implements PaymentService {
         TripPayment payment = tripPaymentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripPayment not found"));
         tripPaymentRepository.deleteById(id);
+        attachmentService.deleteAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, id);
         userRepository.findByIdAndRole(payment.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
                     adjustDriverOutstanding(driver, -payment.getAmount());
@@ -128,7 +138,7 @@ public class PaymentServiceImpl implements PaymentService {
     // Deposit Records
 
     @Override
-    public DepositRecordDTO createDepositRecord(DepositRecordRequest req) {
+    public DepositRecordDTO createDepositRecord(DepositRecordRequest req, List<MultipartFile> attachments) {
         // Validate driver exists
         User driver = userRepository.findByIdAndRole(req.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
@@ -143,6 +153,8 @@ public class PaymentServiceImpl implements PaymentService {
         deposit = depositRecordRepository.save(deposit);
         adjustDriverOutstanding(driver, -req.getAmount());
         userRepository.save(driver);
+        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, deposit.getId(),
+                attachments == null ? Collections.emptyList() : attachments);
         return toDepositRecordDTO(deposit);
     }
 
@@ -168,6 +180,7 @@ public class PaymentServiceImpl implements PaymentService {
         DepositRecord deposit = depositRecordRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "DepositRecord not found"));
         depositRecordRepository.deleteById(id);
+        attachmentService.deleteAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, id);
         userRepository.findByIdAndRole(deposit.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
                     adjustDriverOutstanding(driver, deposit.getAmount());
@@ -178,7 +191,8 @@ public class PaymentServiceImpl implements PaymentService {
     // Customer advance payments
 
     @Override
-    public CustomerAdvancePaymentDTO createCustomerAdvancePayment(CustomerAdvancePaymentRequest req) {
+    public CustomerAdvancePaymentDTO createCustomerAdvancePayment(CustomerAdvancePaymentRequest req,
+                                                                  List<MultipartFile> attachments) {
         if (req.getTripId() != null) {
             tripRepository.findById(req.getTripId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
@@ -198,6 +212,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
 
         advance = customerAdvancePaymentRepository.save(advance);
+        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE, advance.getId(),
+                attachments == null ? Collections.emptyList() : attachments);
         return toCustomerAdvancePaymentDTO(advance);
     }
 
@@ -264,7 +280,8 @@ public class PaymentServiceImpl implements PaymentService {
     // Driver expense advances
 
     @Override
-    public DriverExpenseAdvanceDTO createDriverExpenseAdvance(DriverExpenseAdvanceRequest req) {
+    public DriverExpenseAdvanceDTO createDriverExpenseAdvance(DriverExpenseAdvanceRequest req,
+                                                              List<MultipartFile> attachments) {
         User driver = findDriverOrThrow(req.getDriverId());
 
         if (req.getTripId() != null) {
@@ -287,6 +304,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
 
         advance = driverExpenseAdvanceRepository.save(advance);
+        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE, advance.getId(),
+                attachments == null ? Collections.emptyList() : attachments);
         return toDriverExpenseAdvanceDTO(advance);
     }
 
@@ -371,6 +390,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(payment.getAmount())
                 .method(payment.getMethod())
                 .collectedAt(formatDate(payment.getCollectedAt()))
+                .attachments(toAttachmentDTOs(PaymentAttachment.ReferenceType.TRIP_PAYMENT, payment.getId()))
                 .build();
     }
 
@@ -381,6 +401,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(deposit.getAmount())
                 .createdAt(formatDate(deposit.getCreatedAt()))
                 .note(deposit.getNote())
+                .attachments(toAttachmentDTOs(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, deposit.getId()))
                 .build();
     }
 
@@ -401,6 +422,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .reconciledAt(formatDate(advance.getReconciledAt()))
                 .receiptCode(advance.getReceiptCode())
                 .note(advance.getNote())
+                .attachments(toAttachmentDTOs(PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE, advance.getId()))
                 .build();
     }
 
@@ -420,9 +442,38 @@ public class PaymentServiceImpl implements PaymentService {
                 .deductedAt(formatDate(advance.getDeductedAt()))
                 .rejectionReason(advance.getRejectionReason())
                 .note(advance.getNote())
+                .attachments(toAttachmentDTOs(PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE, advance.getId()))
                 .build();
     }
     
+    private List<PaymentAttachmentDTO> toAttachmentDTOs(PaymentAttachment.ReferenceType referenceType, Long referenceId) {
+        if (referenceId == null) {
+            return List.of();
+        }
+        return attachmentService.getAttachments(referenceType, referenceId).stream()
+                .map(attachment -> PaymentAttachmentDTO.builder()
+                        .id(attachment.getId())
+                        .fileName(attachment.getFileName())
+                        .contentType(attachment.getContentType())
+                        .sizeBytes(attachment.getSizeBytes())
+                        .createdAt(formatDate(attachment.getCreatedAt()))
+                        .expiresAt(formatDate(attachment.getExpiresAt()))
+                        .downloadUrl(buildAttachmentDownloadUrl(attachment.getId()))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private String buildAttachmentDownloadUrl(Long attachmentId) {
+        try {
+            return ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .path("/transport-service/payments/attachments/")
+                    .path(attachmentId.toString())
+                    .toUriString();
+        } catch (IllegalStateException ex) {
+            return "/transport-service/payments/attachments/" + attachmentId;
+        }
+    }
+
     private String formatDate(Date date) {
         if (date == null) return null;
         return dateFormat.format(date);

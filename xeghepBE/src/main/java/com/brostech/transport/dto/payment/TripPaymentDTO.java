@@ -1,7 +1,10 @@
 package com.brostech.transport.dto.payment;
 
 import com.brostech.transport.jpa.entity.TripPayment;
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+
+import java.util.List;
 
 @Data
 @Builder
@@ -12,4 +15,5 @@ public class TripPaymentDTO {
     private Double amount;
     private TripPayment.PaymentMethod method;
     private String collectedAt;
+    private List<PaymentAttachmentDTO> attachments;
 }

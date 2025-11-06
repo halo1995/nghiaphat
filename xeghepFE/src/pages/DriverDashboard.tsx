@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { createDriverExpenseAdvance, getDriverExpenseAdvances, type DriverExpenseType, type DriverExpenseStatus } from '@/data/accounting';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
 const driverStatusLabels: Record<DriverExpenseStatus, string> = {
   requested: 'Chờ duyệt',
@@ -50,6 +51,9 @@ const DriverDashboard = () => {
     tripId: '',
     note: '',
   });
+  const [driverAdvanceImages, setDriverAdvanceImages] = useState<File[]>([]);
+  const driverAdvanceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [driverAdvanceImagesLoading, setDriverAdvanceImagesLoading] = useState(false);
   const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
   const driverId = user?.id ? user.id.toString() : '';
 
@@ -70,6 +74,10 @@ const DriverDashboard = () => {
     onSuccess: () => {
       toast({ title: 'Đã gửi yêu cầu', description: 'Tạm ứng phí sẽ được kế toán xem xét' });
       setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
+      setDriverAdvanceImages([]);
+      if (driverAdvanceFileInputRef.current) {
+        driverAdvanceFileInputRef.current.value = '';
+      }
       queryClient.invalidateQueries({ queryKey: ['driver-expense-advances', driverId] });
     },
     onError: (error: unknown) => {
@@ -80,7 +88,13 @@ const DriverDashboard = () => {
       });
     },
   });
-  const openFinanceDialog = () => setFinanceDialogOpen(true);
+  const openFinanceDialog = () => {
+    setDriverAdvanceImages([]);
+    if (driverAdvanceFileInputRef.current) {
+      driverAdvanceFileInputRef.current.value = '';
+    }
+    setFinanceDialogOpen(true);
+  };
 
   // Filter trips for this driver
   const myTrips = allTrips.filter(trip => 
@@ -117,6 +131,35 @@ const DriverDashboard = () => {
 
   const formatCurrency = (value: number) => `${value.toLocaleString('vi-VN')} ₫`;
 
+  const handleDriverAdvanceImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setDriverAdvanceImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setDriverAdvanceImages(compressed);
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setDriverAdvanceImagesLoading(false);
+    }
+  };
+
   const statusColors: Record<string, string> = {
     'Đã phân xe': 'bg-blue-100 text-blue-700 border-blue-200',
     'Đang đón': 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -148,7 +191,19 @@ const DriverDashboard = () => {
           <h1 className="text-2xl font-bold text-gray-800">Lịch Trình Của Tôi</h1>
           <p className="text-sm text-muted-foreground">Xem và quản lý các chuyến đi được phân công</p>
         </div>
-        <Dialog open={financeDialogOpen} onOpenChange={setFinanceDialogOpen}>
+        <Dialog
+          open={financeDialogOpen}
+          onOpenChange={(open) => {
+            setFinanceDialogOpen(open);
+            if (!open) {
+              setDriverAdvanceImages([]);
+              if (driverAdvanceFileInputRef.current) {
+                driverAdvanceFileInputRef.current.value = '';
+              }
+              setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button variant="outline" className="gap-2" onClick={openFinanceDialog}>
               <Wallet size={18} />
@@ -159,6 +214,14 @@ const DriverDashboard = () => {
             <DialogHeader>
               <DialogTitle>Đề nghị tạm ứng phí tài xế</DialogTitle>
             </DialogHeader>
+            <input
+              ref={driverAdvanceFileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleDriverAdvanceImagesSelect}
+            />
                 <form
                   className="space-y-4"
                   onSubmit={(event) => {
@@ -187,6 +250,7 @@ const DriverDashboard = () => {
                       tripId: driverAdvanceForm.tripId.trim() || undefined,
                       requestedBy: driverId,
                       note: driverAdvanceForm.note.trim() || undefined,
+                      attachments: driverAdvanceImages,
                     });
                   }}
                 >
@@ -235,6 +299,38 @@ const DriverDashboard = () => {
                       />
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Ảnh chứng từ</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={driverAdvanceImagesLoading}
+                        onClick={() => driverAdvanceFileInputRef.current?.click()}
+                      >
+                        {driverAdvanceImages.length
+                          ? `Thay ảnh (${driverAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
+                          : 'Đính kèm ảnh (tối đa 3)'}
+                      </Button>
+                      {driverAdvanceImages.length > 0 && (
+                        <Button type="button" variant="ghost" onClick={() => setDriverAdvanceImages([])}>
+                          Xóa ảnh
+                        </Button>
+                      )}
+                      {driverAdvanceImagesLoading && (
+                        <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
+                      )}
+                    </div>
+                    {driverAdvanceImages.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {driverAdvanceImages.map((file, idx) => (
+                          <Badge key={`driver-advance-img-${idx}`} variant="outline">
+                            {file.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="driver-finance-request-note">Ghi chú kèm chứng từ</Label>
                     <Textarea
@@ -248,7 +344,11 @@ const DriverDashboard = () => {
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={driverAdvanceMutation.isPending} className="min-w-32">
+                    <Button
+                      type="submit"
+                      disabled={driverAdvanceMutation.isPending || driverAdvanceImagesLoading}
+                      className="min-w-32"
+                    >
                       {driverAdvanceMutation.isPending ? 'Đang gửi...' : 'Gửi yêu cầu'}
                     </Button>
                   </div>
@@ -356,6 +456,17 @@ const DriverDashboard = () => {
                               )}
                               {advance.tripId && (
                                 <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
+                              )}
+                              {advance.attachments.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                  {advance.attachments.map((attachment) => (
+                                    <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
+                                      <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                        {attachment.fileName}
+                                      </a>
+                                    </Button>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </td>

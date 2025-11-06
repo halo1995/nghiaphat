@@ -374,6 +374,6 @@ public class TripServiceImpl implements TripService {
         request.setDriverId(trip.getDriverId());
         request.setAmount(trip.getPrice().doubleValue());
         request.setMethod(TripPayment.PaymentMethod.CASH);
-        paymentService.createTripPayment(request);
+        paymentService.createTripPayment(request, java.util.Collections.emptyList());
     }
 }

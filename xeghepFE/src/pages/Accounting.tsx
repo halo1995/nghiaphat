@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getRevenueSummary,
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { CustomerAdvanceStatus, DriverExpenseStatus, DriverExpenseType } from '@/data/accounting';
+import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
 const Accounting: React.FC = () => {
   const qc = useQueryClient();
@@ -41,6 +42,13 @@ const Accounting: React.FC = () => {
     amount: '',
     method: 'cash' as 'cash' | 'transfer',
   });
+  const [paymentImages, setPaymentImages] = useState<File[]>([]);
+  const paymentFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [paymentImagesLoading, setPaymentImagesLoading] = useState(false);
+  const [depositAttachments, setDepositAttachments] = useState<Record<string, File[]>>({});
+  const [depositAttachmentTarget, setDepositAttachmentTarget] = useState<string | null>(null);
+  const depositFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [depositImagesLoading, setDepositImagesLoading] = useState(false);
 
   const isAccountant = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
 
@@ -77,6 +85,70 @@ const Accounting: React.FC = () => {
     parking: 'Phí bến bãi',
     fuel: 'Nhiên liệu',
     other: 'Khác',
+  };
+
+  const handlePaymentImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setPaymentImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setPaymentImages(compressed);
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setPaymentImagesLoading(false);
+    }
+  };
+
+  const handleDepositImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!depositAttachmentTarget || !files.length) {
+      setDepositAttachmentTarget(null);
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      setDepositAttachmentTarget(null);
+      return;
+    }
+    setDepositImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setDepositAttachments((prev) => ({
+        ...prev,
+        [depositAttachmentTarget]: compressed,
+      }));
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setDepositImagesLoading(false);
+      setDepositAttachmentTarget(null);
+    }
   };
 
   const dateFromObj = useMemo(() => (dateFrom ? new Date(dateFrom) : undefined), [dateFrom]);
@@ -127,11 +199,21 @@ const Accounting: React.FC = () => {
 
   const depositMut = useMutation({
     mutationFn: createDeposit,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast({ title: 'Đã nộp tiền', description: 'Cập nhật công nợ tài xế thành công' });
       qc.invalidateQueries({ queryKey: ['drivers'] });
       qc.invalidateQueries({ queryKey: ['revenue-summary'] });
       qc.invalidateQueries({ queryKey: ['deposits'] });
+      if (variables?.driverId) {
+        setDepositAttachments((prev) => {
+          const next = { ...prev };
+          delete next[variables.driverId];
+          return next;
+        });
+      }
+      if (depositFileInputRef.current) {
+        depositFileInputRef.current.value = '';
+      }
     },
     onError: (e: unknown) => {
       toast({
@@ -149,6 +231,10 @@ const Accounting: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['drivers'] });
       qc.invalidateQueries({ queryKey: ['payments'] });
       qc.invalidateQueries({ queryKey: ['revenue-summary'] });
+      setPaymentImages([]);
+      if (paymentFileInputRef.current) {
+        paymentFileInputRef.current.value = '';
+      }
     },
     onError: (e: unknown) => {
       toast({
@@ -269,6 +355,22 @@ const Accounting: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
+      <input
+        ref={paymentFileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handlePaymentImagesSelect}
+      />
+      <input
+        ref={depositFileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleDepositImagesSelect}
+      />
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Kế toán thu - nộp</h2>
@@ -406,7 +508,9 @@ const Accounting: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {driverSummaries.map((driver) => (
+              {driverSummaries.map((driver) => {
+                const driverAttachments = depositAttachments[driver.driverId] ?? [];
+                return (
                 <TableRow key={driver.driverId}>
                   <TableCell>
                     <div className="flex flex-col">
@@ -420,7 +524,7 @@ const Accounting: React.FC = () => {
                 <TableCell className="text-right text-purple-600">{driver.advanceOutstanding.toLocaleString('vi-VN')} ₫</TableCell>
                   <TableCell className="text-right">{driver.completedTrips}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Input
                         type="number"
                         className="w-32"
@@ -432,7 +536,33 @@ const Accounting: React.FC = () => {
                         min={0}
                       />
                       <Button
-                        disabled={depositMut.isPending}
+                        type="button"
+                        variant="outline"
+                        disabled={depositImagesLoading}
+                        onClick={() => {
+                          setDepositAttachmentTarget(driver.driverId);
+                          depositFileInputRef.current?.click();
+                        }}
+                      >
+                        Ảnh{driverAttachments.length ? ` (${driverAttachments.length})` : ''}
+                      </Button>
+                      {driverAttachments.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setDepositAttachments((prev) => {
+                              const next = { ...prev };
+                              delete next[driver.driverId];
+                              return next;
+                            })
+                          }
+                        >
+                          Xóa ảnh
+                        </Button>
+                      )}
+                      <Button
+                        disabled={depositMut.isPending || depositImagesLoading}
                         onClick={() => {
                           const rawValue = depositValues[driver.driverId];
                           const amount = Number(rawValue || 0);
@@ -440,16 +570,31 @@ const Accounting: React.FC = () => {
                             toast({ title: 'Lỗi', description: 'Nhập số tiền hợp lệ', variant: 'destructive' });
                             return;
                           }
-                          depositMut.mutate({ driverId: driver.driverId, amount, note: 'Nộp tiền mặt' });
+                          depositMut.mutate({
+                            driverId: driver.driverId,
+                            amount,
+                            note: 'Nộp tiền mặt',
+                            attachments: driverAttachments,
+                          });
                           setDepositValues((prev) => ({ ...prev, [driver.driverId]: '' }));
                         }}
                       >
                         Nộp
                       </Button>
                     </div>
+                    {driverAttachments.length > 0 && (
+                      <div className="mt-2 flex flex-wrap justify-end gap-2">
+                        {driverAttachments.map((file, idx) => (
+                          <Badge key={`${driver.driverId}-${idx}`} variant="outline">
+                            {file.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -543,6 +688,17 @@ const Accounting: React.FC = () => {
                         </div>
                         {record.note && (
                           <p className="mt-2 text-xs text-muted-foreground">{record.note}</p>
+                        )}
+                        {record.attachments.length > 0 && (
+                          <div className="mt-2 flex flex-col gap-1 items-end">
+                            {record.attachments.map((attachment) => (
+                              <Button key={attachment.id} variant="link" size="sm" asChild>
+                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                  {attachment.fileName}
+                                </a>
+                              </Button>
+                            ))}
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -645,6 +801,17 @@ const Accounting: React.FC = () => {
                         {advance.rejectionReason && (
                           <p className="mt-1 text-xs text-destructive">Lý do: {advance.rejectionReason}</p>
                         )}
+                        {advance.attachments.length > 0 && (
+                          <div className="mt-2 flex flex-col gap-1 items-end">
+                            {advance.attachments.map((attachment) => (
+                              <Button key={attachment.id} variant="link" size="sm" asChild>
+                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                  {attachment.fileName}
+                                </a>
+                              </Button>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -717,7 +884,7 @@ const Accounting: React.FC = () => {
             <div className="flex gap-2">
               <Button
                 className="flex-1"
-                disabled={paymentMut.isPending}
+                disabled={paymentMut.isPending || paymentImagesLoading}
                 onClick={() => {
                   const amount = Number(paymentForm.amount || 0);
                   if (!paymentForm.tripId || !paymentForm.driverId || !amount || amount <= 0) {
@@ -729,6 +896,7 @@ const Accounting: React.FC = () => {
                     driverId: paymentForm.driverId,
                     amount,
                     method: paymentForm.method,
+                    attachments: paymentImages,
                   });
                   setPaymentForm({ tripId: '', driverId: '', amount: '', method: 'cash' });
                 }}
@@ -736,6 +904,36 @@ const Accounting: React.FC = () => {
                 Ghi nhận
               </Button>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={paymentImagesLoading}
+                onClick={() => paymentFileInputRef.current?.click()}
+              >
+                {paymentImages.length ? `Thay ảnh (${paymentImages.length}/${MAX_VOUCHER_IMAGES})` : 'Đính kèm ảnh (tối đa 3)'}
+              </Button>
+              {paymentImages.length > 0 && (
+                <Button type="button" variant="ghost" onClick={() => setPaymentImages([])}>
+                  Xóa ảnh
+                </Button>
+              )}
+              {paymentImagesLoading && (
+                <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
+              )}
+            </div>
+            {paymentImages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {paymentImages.map((file, idx) => (
+                  <Badge key={`payment-image-${idx}`} variant="outline">
+                    {file.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -748,6 +946,7 @@ const Accounting: React.FC = () => {
                 <TableHead>Chuyến</TableHead>
                 <TableHead>Tài xế</TableHead>
                 <TableHead>Hình thức</TableHead>
+                <TableHead>Chứng từ</TableHead>
                 <TableHead className="text-right">Số tiền</TableHead>
               </TableRow>
             </TableHeader>
@@ -763,6 +962,21 @@ const Accounting: React.FC = () => {
                       <Badge variant="outline">{payment.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</Badge>
                     </TableCell>
                     <TableCell>{payment.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</TableCell>
+                    <TableCell>
+                      {payment.attachments.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {payment.attachments.map((attachment) => (
+                            <Button key={attachment.id} variant="link" size="sm" asChild>
+                              <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                {attachment.fileName}
+                              </a>
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Không có</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">{payment.amount.toLocaleString('vi-VN')} ₫</TableCell>
                   </TableRow>
                 );
@@ -783,6 +997,7 @@ const Accounting: React.FC = () => {
                 <TableHead>Thời gian</TableHead>
                 <TableHead>Tài xế</TableHead>
                 <TableHead className="text-right">Số tiền</TableHead>
+                <TableHead>Chứng từ</TableHead>
                 <TableHead>Ghi chú</TableHead>
               </TableRow>
             </TableHeader>
@@ -794,6 +1009,21 @@ const Accounting: React.FC = () => {
                     <TableCell>{new Date(deposit.createdAt).toLocaleString('vi-VN')}</TableCell>
                     <TableCell>{driver?.name || deposit.driverId}</TableCell>
                     <TableCell className="text-right">{deposit.amount.toLocaleString('vi-VN')} ₫</TableCell>
+                    <TableCell>
+                      {deposit.attachments.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {deposit.attachments.map((attachment) => (
+                            <Button key={attachment.id} variant="link" size="sm" asChild>
+                              <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                {attachment.fileName}
+                              </a>
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Không có</span>
+                      )}
+                    </TableCell>
                     <TableCell>{deposit.note || ''}</TableCell>
                   </TableRow>
                 );

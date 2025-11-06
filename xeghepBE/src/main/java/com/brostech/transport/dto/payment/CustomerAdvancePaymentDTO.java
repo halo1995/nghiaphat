@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -25,4 +27,5 @@ public class CustomerAdvancePaymentDTO {
     private String reconciledAt;
     private String receiptCode;
     private String note;
+    private List<PaymentAttachmentDTO> attachments;
 }

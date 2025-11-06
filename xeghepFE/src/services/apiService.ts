@@ -35,12 +35,16 @@ class ApiService {
     return API_BASE_URL + path;
   }
 
-  private getAuthHeaders(): HeadersInit {
+  private getAuthHeaders(mode: 'json' | 'multipart' = 'json'): HeadersInit {
     const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
+    const headers: Record<string, string> = {};
+    if (mode === 'json') {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -68,6 +72,15 @@ class ApiService {
       return trimmed;
     }
     return `${trimmed} 00:00:00`;
+  }
+
+  private buildMultipartPayload<T>(payload: T, files: File[] = [], fileField: string = 'images'): FormData {
+    const formData = new FormData();
+    formData.append('payload', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    files.forEach((file) => {
+      formData.append(fileField, file);
+    });
+    return formData;
   }
 
   // Authentication APIs
@@ -298,11 +311,12 @@ class ApiService {
     return this.handleResponse<ApiResponse<TripPaymentResponse>>(response);
   }
 
-  async createTripPayment(request: TripPaymentRequest): Promise<TripPaymentResponse> {
+  async createTripPayment(request: TripPaymentRequest, attachments: File[] = []): Promise<TripPaymentResponse> {
+    const payload = this.buildMultipartPayload(request, attachments);
     const response = await fetch(this.buildUrl('/payments/trips'), {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(request),
+      headers: this.getAuthHeaders('multipart'),
+      body: payload,
     });
     return this.handleResponse<TripPaymentResponse>(response);
   }
@@ -328,11 +342,12 @@ class ApiService {
     return this.handleResponse<ApiResponse<DepositRecordResponse>>(response);
   }
 
-  async createDepositRecord(request: DepositRecordRequest): Promise<DepositRecordResponse> {
+  async createDepositRecord(request: DepositRecordRequest, attachments: File[] = []): Promise<DepositRecordResponse> {
+    const payload = this.buildMultipartPayload(request, attachments);
     const response = await fetch(this.buildUrl('/payments/deposits'), {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(request),
+      headers: this.getAuthHeaders('multipart'),
+      body: payload,
     });
     return this.handleResponse<DepositRecordResponse>(response);
   }
@@ -365,11 +380,13 @@ class ApiService {
 
   async createCustomerAdvancePayment(
     request: CustomerAdvancePaymentRequest,
+    attachments: File[] = [],
   ): Promise<CustomerAdvancePaymentResponse> {
+    const payload = this.buildMultipartPayload(request, attachments);
     const response = await fetch(this.buildUrl('/payments/customer-advances'), {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(request),
+      headers: this.getAuthHeaders('multipart'),
+      body: payload,
     });
     return this.handleResponse<CustomerAdvancePaymentResponse>(response);
   }
@@ -404,11 +421,13 @@ class ApiService {
 
   async createDriverExpenseAdvance(
     request: DriverExpenseAdvanceRequest,
+    attachments: File[] = [],
   ): Promise<DriverExpenseAdvanceResponse> {
+    const payload = this.buildMultipartPayload(request, attachments);
     const response = await fetch(this.buildUrl('/payments/driver-advances'), {
       method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(request),
+      headers: this.getAuthHeaders('multipart'),
+      body: payload,
     });
     return this.handleResponse<DriverExpenseAdvanceResponse>(response);
   }

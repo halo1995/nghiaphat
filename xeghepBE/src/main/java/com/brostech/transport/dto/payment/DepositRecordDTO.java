@@ -1,6 +1,9 @@
 package com.brostech.transport.dto.payment;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+
+import java.util.List;
 
 @Data
 @Builder
@@ -10,4 +13,5 @@ public class DepositRecordDTO {
     private Double amount;
     private String createdAt;
     private String note;
+    private List<PaymentAttachmentDTO> attachments;
 }

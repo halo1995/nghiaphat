@@ -48,3 +48,10 @@ server:
   tomcat:
     threads:
       max: ${REQUEST_MAX_THREAD:2500}
+
+payment:
+  attachments:
+    base-dir: ${PAYMENT_ATTACHMENTS_BASE_DIR:/app/data/ticket-images}
+    retention-days: ${PAYMENT_ATTACHMENTS_RETENTION_DAYS:40}
+    max-files: ${PAYMENT_ATTACHMENTS_MAX_FILES:3}
+    max-file-size-bytes: ${PAYMENT_ATTACHMENTS_MAX_FILE_SIZE_BYTES:10485760}

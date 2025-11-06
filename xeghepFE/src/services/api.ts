@@ -27,6 +27,16 @@ export interface ApiResponse<T> {
   empty: boolean;
 }
 
+export interface PaymentAttachmentResponse {
+  id: number;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+  createdAt: string;
+  expiresAt: string | null;
+  downloadUrl: string;
+}
+
 export interface DriverResponse {
   id: number;
   username: string;
@@ -222,6 +232,7 @@ export interface TripPaymentResponse {
   amount: number;
   method: PaymentMethod;
   collectedAt: string;
+  attachments: PaymentAttachmentResponse[];
 }
 
 export interface TripPaymentRequest {
@@ -237,6 +248,7 @@ export interface DepositRecordResponse {
   amount: number;
   createdAt: string;
   note?: string | null;
+  attachments: PaymentAttachmentResponse[];
 }
 
 export interface DepositRecordRequest {
@@ -264,6 +276,7 @@ export interface CustomerAdvancePaymentResponse {
   reconciledAt: string | null;
   receiptCode: string | null;
   note: string | null;
+  attachments: PaymentAttachmentResponse[];
 }
 
 export interface CustomerAdvancePaymentRequest {
@@ -301,6 +314,7 @@ export interface DriverExpenseAdvanceResponse {
   deductedAt: string | null;
   rejectionReason: string | null;
   note: string | null;
+  attachments: PaymentAttachmentResponse[];
 }
 
 export interface DriverExpenseAdvanceRequest {

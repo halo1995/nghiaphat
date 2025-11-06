@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,4 +26,5 @@ public class DriverExpenseAdvanceDTO {
     private String deductedAt;
     private String rejectionReason;
     private String note;
+    private List<PaymentAttachmentDTO> attachments;
 }

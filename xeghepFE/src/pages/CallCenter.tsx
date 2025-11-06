@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -22,6 +22,7 @@ import { vi } from 'date-fns/locale';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { createCustomerAdvance, getCustomerAdvances, type CustomerAdvanceMethod, type CustomerAdvancePayment, type CustomerAdvanceStatus } from '@/data/accounting';
+import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -110,6 +111,35 @@ const CallCenter = () => {
     return map;
   }, [customerAdvancesQuery.data]);
 
+  const handleCustomerAdvanceImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCustomerAdvanceImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setCustomerAdvanceImages(compressed);
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setCustomerAdvanceImagesLoading(false);
+    }
+  };
+
   const provinces = useMemo(() => getProvinces(), []);
   const [pickupProvinceCode, setPickupProvinceCode] = useState('');
   const [dropoffProvinceCode, setDropoffProvinceCode] = useState('');
@@ -128,8 +158,12 @@ const CallCenter = () => {
     receiptCode: '',
     note: '',
   });
+  const [customerAdvanceImages, setCustomerAdvanceImages] = useState<File[]>([]);
+  const customerAdvanceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [customerAdvanceImagesLoading, setCustomerAdvanceImagesLoading] = useState(false);
   const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
   const [selectedTripForAdvance, setSelectedTripForAdvance] = useState<Trip | null>(null);
+  const isAdvanceLocked = Boolean(selectedTripForAdvance);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Trip> }) => updateTrip(id, data),
@@ -181,6 +215,10 @@ const CallCenter = () => {
         receiptCode: '',
         note: '',
       });
+      setCustomerAdvanceImages([]);
+      if (customerAdvanceFileInputRef.current) {
+        customerAdvanceFileInputRef.current.value = '';
+      }
       queryClient.invalidateQueries({ queryKey: ['customer-advances'] });
       setFinanceDialogOpen(false);
       setSelectedTripForAdvance(null);
@@ -525,6 +563,10 @@ const CallCenter = () => {
                     receiptCode: '',
                     note: '',
                   });
+                  setCustomerAdvanceImages([]);
+                  if (customerAdvanceFileInputRef.current) {
+                    customerAdvanceFileInputRef.current.value = '';
+                  }
                 }
               }}
             >
@@ -543,6 +585,10 @@ const CallCenter = () => {
                       receiptCode: '',
                       note: '',
                     });
+                    setCustomerAdvanceImages([]);
+                    if (customerAdvanceFileInputRef.current) {
+                      customerAdvanceFileInputRef.current.value = '';
+                    }
                   }}
                 >
                   <Wallet size={18} />
@@ -553,6 +599,14 @@ const CallCenter = () => {
                 <DialogHeader>
                   <DialogTitle>Ghi nhận ứng trước của khách</DialogTitle>
                 </DialogHeader>
+                <input
+                  ref={customerAdvanceFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleCustomerAdvanceImagesSelect}
+                />
                 {selectedTripForAdvance && (
                   <div className="border rounded-lg bg-muted/40 px-4 py-3 space-y-1 text-sm text-gray-700">
                     <div className="font-semibold text-gray-900">Chuyến #{selectedTripForAdvance.id}</div>
@@ -587,6 +641,7 @@ const CallCenter = () => {
                         collectedBy: user?.id ? user.id.toString() : undefined,
                         receiptCode: customerAdvanceForm.receiptCode.trim() || undefined,
                         note: customerAdvanceForm.note.trim() || undefined,
+                        attachments: customerAdvanceImages,
                       });
                     }}
                   >
@@ -597,9 +652,11 @@ const CallCenter = () => {
                           id="finance-advance-trip"
                           placeholder="VD: 142"
                           value={customerAdvanceForm.tripId}
-                          onChange={(event) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }))
-                          }
+                          disabled={isAdvanceLocked}
+                          onChange={(event) => {
+                            if (isAdvanceLocked) return;
+                            setCustomerAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }));
+                          }}
                         />
                       </div>
                       <div className="space-y-1">
@@ -620,9 +677,11 @@ const CallCenter = () => {
                         <Input
                           id="finance-advance-customer"
                           value={customerAdvanceForm.customerName}
-                          onChange={(event) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, customerName: event.target.value }))
-                          }
+                          disabled={isAdvanceLocked}
+                          onChange={(event) => {
+                            if (isAdvanceLocked) return;
+                            setCustomerAdvanceForm((prev) => ({ ...prev, customerName: event.target.value }));
+                          }}
                           placeholder="Ví dụ: Nguyễn Văn A"
                         />
                       </div>
@@ -631,9 +690,11 @@ const CallCenter = () => {
                         <Input
                           id="finance-advance-phone"
                           value={customerAdvanceForm.customerPhone}
-                          onChange={(event) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, customerPhone: event.target.value }))
-                          }
+                          disabled={isAdvanceLocked}
+                          onChange={(event) => {
+                            if (isAdvanceLocked) return;
+                            setCustomerAdvanceForm((prev) => ({ ...prev, customerPhone: event.target.value }));
+                          }}
                           placeholder="0987654321"
                         />
                       </div>
@@ -659,12 +720,46 @@ const CallCenter = () => {
                         <Input
                           id="finance-advance-receipt"
                           value={customerAdvanceForm.receiptCode}
-                          onChange={(event) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, receiptCode: event.target.value }))
-                          }
+                          disabled={isAdvanceLocked}
+                          onChange={(event) => {
+                            if (isAdvanceLocked) return;
+                            setCustomerAdvanceForm((prev) => ({ ...prev, receiptCode: event.target.value }));
+                          }}
                           placeholder="Mã nội bộ hoặc biên lai"
                         />
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ảnh chứng từ</Label>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={customerAdvanceImagesLoading}
+                          onClick={() => customerAdvanceFileInputRef.current?.click()}
+                        >
+                          {customerAdvanceImages.length
+                            ? `Thay ảnh (${customerAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
+                            : 'Đính kèm ảnh (tối đa 3)'}
+                        </Button>
+                        {customerAdvanceImages.length > 0 && (
+                          <Button type="button" variant="ghost" onClick={() => setCustomerAdvanceImages([])}>
+                            Xóa ảnh
+                          </Button>
+                        )}
+                        {customerAdvanceImagesLoading && (
+                          <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
+                        )}
+                      </div>
+                      {customerAdvanceImages.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {customerAdvanceImages.map((file, idx) => (
+                            <Badge key={`advance-img-${idx}`} variant="outline">
+                              {file.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="finance-advance-note">Ghi chú</Label>
@@ -679,7 +774,11 @@ const CallCenter = () => {
                       />
                     </div>
                     <div className="flex justify-end">
-                      <Button type="submit" disabled={customerAdvanceMutation.isPending} className="min-w-32">
+                      <Button
+                        type="submit"
+                        disabled={customerAdvanceMutation.isPending || customerAdvanceImagesLoading}
+                        className="min-w-32"
+                      >
                         {customerAdvanceMutation.isPending ? 'Đang lưu...' : 'Ghi nhận'}
                       </Button>
                     </div>
@@ -864,6 +963,17 @@ const CallCenter = () => {
                                         {advance.note && (
                                           <p className="text-xs text-muted-foreground mt-0.5">{advance.note}</p>
                                         )}
+                                        {advance.attachments.length > 0 && (
+                                          <div className="mt-1 flex flex-col gap-1">
+                                            {advance.attachments.map((attachment) => (
+                                              <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
+                                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                                  {attachment.fileName}
+                                                </a>
+                                              </Button>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                       <div className="flex items-center gap-3 justify-between sm:justify-end">
                                         <Badge variant={customerAdvanceStatusVariants[advance.status]}>
@@ -936,7 +1046,7 @@ const CallCenter = () => {
                                 onClick={() => {
                                   setSelectedTripForAdvance(trip);
                                   setCustomerAdvanceForm({
-                                    tripId: trip.id,
+                    tripId: String(trip.id ?? ''),
                                     customerName: trip.customerName,
                                     customerPhone: trip.customerPhone,
                                     amount: '',

@@ -11,12 +11,22 @@ import com.brostech.transport.dto.payment.DriverExpenseAdvanceRequest;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
+import com.brostech.transport.jpa.entity.PaymentAttachment;
+import com.brostech.transport.service.PaymentAttachmentService;
 import com.brostech.transport.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * PaymentController
@@ -34,6 +44,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final PaymentAttachmentService attachmentService;
 
     // Trip Payments
 
@@ -42,9 +53,15 @@ public class PaymentController {
      * @param req thông tin thanh toán
      * @return TripPaymentDTO đã tạo
      */
-    @PostMapping("/trips")
+    @PostMapping(value = "/trips", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public TripPaymentDTO createTripPaymentWithAttachments(@Valid @RequestPart("payload") TripPaymentRequest req,
+                                                           @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return paymentService.createTripPayment(req, images == null ? Collections.emptyList() : images);
+    }
+
+    @PostMapping(value = "/trips", consumes = MediaType.APPLICATION_JSON_VALUE)
     public TripPaymentDTO createTripPayment(@Valid @RequestBody TripPaymentRequest req) {
-        return paymentService.createTripPayment(req);
+        return paymentService.createTripPayment(req, Collections.emptyList());
     }
 
     /**
@@ -85,9 +102,15 @@ public class PaymentController {
      * @param req thông tin đặt cọc
      * @return DepositRecordDTO đã tạo
      */
-    @PostMapping("/deposits")
+    @PostMapping(value = "/deposits", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DepositRecordDTO createDepositRecordWithAttachments(@Valid @RequestPart("payload") DepositRecordRequest req,
+                                                               @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return paymentService.createDepositRecord(req, images == null ? Collections.emptyList() : images);
+    }
+
+    @PostMapping(value = "/deposits", consumes = MediaType.APPLICATION_JSON_VALUE)
     public DepositRecordDTO createDepositRecord(@Valid @RequestBody DepositRecordRequest req) {
-        return paymentService.createDepositRecord(req);
+        return paymentService.createDepositRecord(req, Collections.emptyList());
     }
 
     /**
@@ -123,9 +146,16 @@ public class PaymentController {
 
     // Customer advance payments
 
-    @PostMapping("/customer-advances")
+    @PostMapping(value = "/customer-advances", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CustomerAdvancePaymentDTO createCustomerAdvanceWithAttachments(
+            @Valid @RequestPart("payload") CustomerAdvancePaymentRequest req,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return paymentService.createCustomerAdvancePayment(req, images == null ? Collections.emptyList() : images);
+    }
+
+    @PostMapping(value = "/customer-advances", consumes = MediaType.APPLICATION_JSON_VALUE)
     public CustomerAdvancePaymentDTO createCustomerAdvance(@Valid @RequestBody CustomerAdvancePaymentRequest req) {
-        return paymentService.createCustomerAdvancePayment(req);
+        return paymentService.createCustomerAdvancePayment(req, Collections.emptyList());
     }
 
     @PatchMapping("/customer-advances/{id}/status")
@@ -143,9 +173,16 @@ public class PaymentController {
 
     // Driver expense advances
 
-    @PostMapping("/driver-advances")
+    @PostMapping(value = "/driver-advances", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DriverExpenseAdvanceDTO createDriverAdvanceWithAttachments(
+            @Valid @RequestPart("payload") DriverExpenseAdvanceRequest req,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return paymentService.createDriverExpenseAdvance(req, images == null ? Collections.emptyList() : images);
+    }
+
+    @PostMapping(value = "/driver-advances", consumes = MediaType.APPLICATION_JSON_VALUE)
     public DriverExpenseAdvanceDTO createDriverAdvance(@Valid @RequestBody DriverExpenseAdvanceRequest req) {
-        return paymentService.createDriverExpenseAdvance(req);
+        return paymentService.createDriverExpenseAdvance(req, Collections.emptyList());
     }
 
     @PatchMapping("/driver-advances/{id}/status")
@@ -171,5 +208,26 @@ public class PaymentController {
     public AccountingSummaryDTO getAccountingSummary(@RequestParam(value = "from", required = false) String from,
                                                      @RequestParam(value = "to", required = false) String to) {
         return paymentService.getAccountingSummary(from, to);
+    }
+
+    @GetMapping("/attachments/{id}")
+    public ResponseEntity<Resource> downloadAttachment(@PathVariable Long id) {
+        PaymentAttachment attachment = attachmentService.getAttachmentOrThrow(id);
+        Resource resource = attachmentService.loadAsResource(attachment);
+        MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        if (attachment.getContentType() != null) {
+            try {
+                mediaType = MediaType.parseMediaType(attachment.getContentType());
+            } catch (Exception ignored) {
+                mediaType = MediaType.APPLICATION_OCTET_STREAM;
+            }
+        }
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok().contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + attachment.getFileName() + "\"");
+        if (attachment.getSizeBytes() != null) {
+            builder = builder.contentLength(attachment.getSizeBytes());
+        }
+        return builder.body(resource);
     }
 }
