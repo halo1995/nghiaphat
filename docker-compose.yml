@@ -1,3 +1,5 @@
+version: "3.8"   # NOTE: Thêm version rõ ràng để docker-compose validate chuẩn hơn
+ 
 services:
   backend:
     build:
@@ -8,12 +10,7 @@ services:
     environment:
       POSTGRES_URL: jdbc:postgresql://db:5432/postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      # SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      # SPRING_JPA_SHOW_SQL: true
-      # SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: true
-      # LOGGING_LEVEL_ORG_HIBERNATE_SQL: DEBUG
-      # LOGGING_LEVEL_ORG_HIBERNATE_TYPE_DESCRIPTOR_SQL_BASICBINDER: TRACE
+      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
       LOGGING_FILE_PATH: /app/logs
     depends_on:
       - db
@@ -22,25 +19,29 @@ services:
     volumes:
       - backend_logs:/app/logs
     restart: unless-stopped
-
+    mem_limit: 1024m     # NOTE: Thay cho deploy.resources.memory
+    cpus: 1           # NOTE: Thay cho deploy.resources.cpus
+ 
   frontend:
     build:
       context: ./xeghepFE
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3000:80"       # NOTE: Nếu FE chạy bằng React dev server thì đổi thành "3000:3000"
     depends_on:
       - backend
     networks:
       - app-network
     restart: unless-stopped
-
+    mem_limit: 512m
+    cpus: 0.5
+ 
   db:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
+      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
     ports:
       - "5432:5432"
     volumes:
@@ -49,14 +50,75 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+    mem_limit: 1024m
+    cpus: 1
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+    networks:
+      - monitor-network
+    mem_limit: 512m
+    cpus: 0.5
+    # NOTE: deploy.resources bỏ đi vì không có tác dụng trong docker-compose
+ 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "4000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+        # NOTE: Mount thư mục provisioning để Grafana tự load datasource Prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin@123Z
+      # NOTE: Bỏ các biến GF_DATASOURCES_DEFAULT_* vì Grafana mới không còn hỗ trợ
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitor-network
+    mem_limit: 256m
+    cpus: 0.2
+ 
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:123456@db:5432/postgres?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app-network
+      - monitor-network
+    mem_limit: 128m
+    cpus: 0.1
+    # NOTE: exporter cần tham gia cả 2 network để đọc DB và gửi metrics cho Prometheus
+ 
 networks:
   app-network:
     driver: bridge
-
+  monitor-network:
+    driver: bridge
+    # NOTE: tách riêng mạng monitoring để cô lập lưu lượng metrics khỏi app traffic
+ 
 volumes:
   postgres_data:
-    external: true
-    name: nghiaphat_postgres_data
+    # NOTE: Bỏ external:true -> để docker-compose tự tạo volume
   backend_logs:
     driver: local
+  prometheus_data:
+  grafana_data:
