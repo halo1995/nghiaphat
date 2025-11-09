@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getRevenueSummary,
@@ -22,7 +22,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import type { CustomerAdvanceStatus, DriverExpenseStatus, DriverExpenseType } from '@/data/accounting';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type {
+  CustomerAdvancePayment,
+  CustomerAdvanceStatus,
+  DriverExpenseAdvance,
+  DriverExpenseStatus,
+  DriverExpenseType,
+} from '@/data/accounting';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
 const Accounting: React.FC = () => {
@@ -49,6 +58,17 @@ const Accounting: React.FC = () => {
   const [depositAttachmentTarget, setDepositAttachmentTarget] = useState<string | null>(null);
   const depositFileInputRef = useRef<HTMLInputElement | null>(null);
   const [depositImagesLoading, setDepositImagesLoading] = useState(false);
+  const [previewAdvance, setPreviewAdvance] = useState<CustomerAdvancePayment | null>(null);
+  const [previewAction, setPreviewAction] = useState<CustomerAdvanceStatus | null>(null);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number>(0);
+  const [approvalNote, setApprovalNote] = useState<string>('');
+  const [customerAttachmentPreviewUrls, setCustomerAttachmentPreviewUrls] = useState<string[]>([]);
+  const customerAttachmentPreviewUrlsRef = useRef<string[]>([]);
+  const [driverAttachmentPreviewUrls, setDriverAttachmentPreviewUrls] = useState<string[]>([]);
+  const driverAttachmentPreviewUrlsRef = useRef<string[]>([]);
+  const [driverAdvancePreview, setDriverAdvancePreview] = useState<DriverExpenseAdvance | null>(null);
+  const [driverAdvanceImageIndex, setDriverAdvanceImageIndex] = useState(0);
+  const [activePreviewTab, setActivePreviewTab] = useState<'customer' | 'driver'>('customer');
 
   const isAccountant = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
 
@@ -85,6 +105,17 @@ const Accounting: React.FC = () => {
     parking: 'Phí bến bãi',
     fuel: 'Nhiên liệu',
     other: 'Khác',
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) {
+      return '--';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '--';
+    }
+    return date.toLocaleString('vi-VN', { hour12: false });
   };
 
   const handlePaymentImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,6 +282,10 @@ const Accounting: React.FC = () => {
       toast({ title: 'Đã cập nhật', description: 'Trạng thái phiếu ứng trước đã thay đổi' });
       qc.invalidateQueries({ queryKey: ['customer-advances'] });
       qc.invalidateQueries({ queryKey: ['revenue-summary'] });
+      setPreviewAdvance(null);
+      setPreviewAction(null);
+      setPreviewImageIndex(0);
+      setApprovalNote('');
     },
     onError: (e: unknown) => {
       toast({
@@ -280,23 +315,12 @@ const Accounting: React.FC = () => {
   const driverSummaries = summaryQ.data?.byDriver ?? [];
   const totalOutstanding = summaryQ.data?.totalOutstanding ?? 0;
 
-  const handleCustomerAdvanceStatus = (id: string, status: CustomerAdvanceStatus) => {
+  const handleCustomerAdvanceStatus = (record: CustomerAdvancePayment, status: CustomerAdvanceStatus) => {
     if (!user?.id) {
       toast({ title: 'Thiếu quyền', description: 'Vui lòng đăng nhập lại', variant: 'destructive' });
       return;
     }
-    let note: string | undefined;
-    if (status === 'rejected') {
-      const reason = typeof window !== 'undefined'
-        ? window.prompt('Nhập lý do từ chối phiếu ứng trước')?.trim()
-        : '';
-      if (!reason) {
-        toast({ title: 'Đã hủy thao tác', description: 'Cần nhập lý do để từ chối phiếu', variant: 'destructive' });
-        return;
-      }
-      note = reason;
-    }
-    customerAdvanceStatusMut.mutate({ id, status, actionUserId: user.id.toString(), note });
+    openAdvancePreview(record, status);
   };
 
   const handleDriverAdvanceStatus = (id: string, status: DriverExpenseStatus) => {
@@ -329,6 +353,181 @@ const Accounting: React.FC = () => {
   const customerAdvances = customerAdvancesQ.data ?? [];
   const driverAdvances = driverAdvancesQ.data ?? [];
 
+  const openAdvancePreview = (record: CustomerAdvancePayment, action?: CustomerAdvanceStatus) => {
+    setDriverAdvancePreview(null);
+    setPreviewAdvance(record);
+    setPreviewAction(action ?? null);
+    setPreviewImageIndex(0);
+    setApprovalNote('');
+    setActivePreviewTab('customer');
+  };
+
+  const closeAdvancePreview = () => {
+    setPreviewAdvance(null);
+    setPreviewAction(null);
+    setPreviewImageIndex(0);
+    setApprovalNote('');
+    setActivePreviewTab('customer');
+    setDriverAdvancePreview(null);
+    setDriverAdvanceImageIndex(0);
+  };
+
+  const showDriverAdvanceAttachments = (record: DriverExpenseAdvance) => {
+    setPreviewAdvance(null);
+    setPreviewAction(null);
+    setPreviewImageIndex(0);
+    setApprovalNote('');
+    setDriverAdvancePreview(record);
+    setDriverAdvanceImageIndex(0);
+    setActivePreviewTab('driver');
+  };
+
+  const submitAdvanceApproval = () => {
+    if (!previewAdvance || !previewAction) {
+      closeAdvancePreview();
+      return;
+    }
+    if (!user?.id) {
+      toast({ title: 'Thiếu quyền', description: 'Vui lòng đăng nhập lại', variant: 'destructive' });
+      return;
+    }
+    const trimmedNote = approvalNote.trim();
+    if (previewAction === 'rejected' && !trimmedNote) {
+      toast({ title: 'Thiếu lý do', description: 'Vui lòng nhập ghi chú khi từ chối phiếu', variant: 'destructive' });
+      return;
+    }
+    customerAdvanceStatusMut.mutate({
+      id: previewAdvance.id,
+      status: previewAction,
+      actionUserId: user.id.toString(),
+      note: trimmedNote || undefined,
+    });
+  };
+
+  useEffect(() => {
+    const revokeAll = () => {
+      customerAttachmentPreviewUrlsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      customerAttachmentPreviewUrlsRef.current = [];
+    };
+
+    revokeAll();
+    setCustomerAttachmentPreviewUrls([]);
+
+    if (!previewAdvance || previewAdvance.attachments.length === 0) {
+      return () => {
+        revokeAll();
+      };
+    }
+
+    let cancelled = false;
+    const token = localStorage.getItem('token');
+
+    const loadPreviews = async () => {
+      const urls: string[] = [];
+      for (const attachment of previewAdvance.attachments) {
+        try {
+          const response = await fetch(attachment.downloadUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (!response.ok) {
+            throw new Error('Failed to load attachment');
+          }
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          urls.push(objectUrl);
+        } catch (error) {
+          urls.push('');
+        }
+      }
+      if (cancelled) {
+        urls.forEach((url) => url && URL.revokeObjectURL(url));
+        return;
+      }
+      customerAttachmentPreviewUrlsRef.current = urls.filter((url) => !!url);
+      setCustomerAttachmentPreviewUrls(urls);
+    };
+
+    loadPreviews();
+
+    return () => {
+      cancelled = true;
+      revokeAll();
+    };
+  }, [previewAdvance]);
+
+  useEffect(() => {
+    const revokeAll = () => {
+      driverAttachmentPreviewUrlsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      driverAttachmentPreviewUrlsRef.current = [];
+    };
+
+    revokeAll();
+    setDriverAttachmentPreviewUrls([]);
+
+    if (!driverAdvancePreview || driverAdvancePreview.attachments.length === 0) {
+      return () => {
+        revokeAll();
+      };
+    }
+
+    let cancelled = false;
+    const token = localStorage.getItem('token');
+
+    const loadPreviews = async () => {
+      const urls: string[] = [];
+      for (const attachment of driverAdvancePreview.attachments) {
+        try {
+          const response = await fetch(attachment.downloadUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (!response.ok) {
+            throw new Error('Failed to load attachment');
+          }
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          urls.push(objectUrl);
+        } catch (error) {
+          urls.push('');
+        }
+      }
+      if (cancelled) {
+        urls.forEach((url) => url && URL.revokeObjectURL(url));
+        return;
+      }
+      driverAttachmentPreviewUrlsRef.current = urls.filter((url) => !!url);
+      setDriverAttachmentPreviewUrls(urls);
+    };
+
+    loadPreviews();
+
+    return () => {
+      cancelled = true;
+      revokeAll();
+    };
+  }, [driverAdvancePreview]);
+
+  useEffect(() => {
+    const total = previewAdvance?.attachments?.length ?? 0;
+    if (total === 0 && previewImageIndex !== 0) {
+      setPreviewImageIndex(0);
+      return;
+    }
+    if (previewImageIndex >= total && total > 0) {
+      setPreviewImageIndex(0);
+    }
+  }, [previewAdvance, previewImageIndex]);
+
+  useEffect(() => {
+    const total = driverAdvancePreview?.attachments?.length ?? 0;
+    if (total === 0 && driverAdvanceImageIndex !== 0) {
+      setDriverAdvanceImageIndex(0);
+      return;
+    }
+    if (driverAdvanceImageIndex >= total && total > 0) {
+      setDriverAdvanceImageIndex(0);
+    }
+  }, [driverAdvancePreview, driverAdvanceImageIndex]);
+
   const filteredPayments = useMemo(() => {
     if (!paymentsQ.data) return [];
     if (!selectedDriverFilter) return paymentsQ.data;
@@ -340,6 +539,18 @@ const Accounting: React.FC = () => {
     if (!selectedDriverFilter) return depositsQ.data;
     return depositsQ.data.filter((deposit) => deposit.driverId === selectedDriverFilter);
   }, [depositsQ.data, selectedDriverFilter]);
+
+  const previewAttachments = previewAdvance?.attachments ?? [];
+  const driverPreviewAttachments = driverAdvancePreview?.attachments ?? [];
+  const activeCustomerAttachmentUrl = customerAttachmentPreviewUrls[previewImageIndex]
+    || previewAttachments[previewImageIndex]?.downloadUrl
+    || '';
+  const activeCustomerAttachment = previewAttachments[previewImageIndex];
+  const activeDriverAttachmentUrl = driverAttachmentPreviewUrls[driverAdvanceImageIndex]
+    || driverPreviewAttachments[driverAdvanceImageIndex]?.downloadUrl
+    || '';
+  const activeDriverAttachment = driverPreviewAttachments[driverAdvanceImageIndex];
+  const isApprovalMode = previewAction !== null;
 
   if (!isAccountant) {
     return (
@@ -652,7 +863,7 @@ const Accounting: React.FC = () => {
                   const methodLabel = record.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản';
                   return (
                     <TableRow key={record.id}>
-                      <TableCell>{new Date(record.collectedAt).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell>{formatDateTime(record.collectedAt)}</TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium text-gray-900">{record.customerName}</span>
@@ -673,32 +884,30 @@ const Accounting: React.FC = () => {
                         <Badge variant={customerStatusVariants[record.status]}>{customerStatusLabels[record.status]}</Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end flex-wrap gap-2">
+                          {record.attachments.length > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAdvancePreview(record)}
+                            >
+                              Xem ảnh ({record.attachments.length})
+                            </Button>
+                          )}
                           {actions.map((action) => (
                             <Button
                               key={action.label}
                               size="sm"
                               variant={action.variant ?? 'outline'}
                               disabled={customerAdvanceStatusMut.isPending}
-                              onClick={() => handleCustomerAdvanceStatus(record.id, action.status)}
+                              onClick={() => handleCustomerAdvanceStatus(record, action.status)}
                             >
                               {action.label}
                             </Button>
                           ))}
                         </div>
                         {record.note && (
-                          <p className="mt-2 text-xs text-muted-foreground">{record.note}</p>
-                        )}
-                        {record.attachments.length > 0 && (
-                          <div className="mt-2 flex flex-col gap-1 items-end">
-                            {record.attachments.map((attachment) => (
-                              <Button key={attachment.id} variant="link" size="sm" asChild>
-                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                  {attachment.fileName}
-                                </a>
-                              </Button>
-                            ))}
-                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground text-right">{record.note}</p>
                         )}
                       </TableCell>
                     </TableRow>
@@ -764,7 +973,7 @@ const Accounting: React.FC = () => {
                   }
                   return (
                     <TableRow key={advance.id}>
-                      <TableCell>{new Date(advance.requestedAt).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell>{formatDateTime(advance.requestedAt)}</TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium text-gray-900">{driver?.name || `#${advance.driverId}`}</span>
@@ -803,13 +1012,13 @@ const Accounting: React.FC = () => {
                         )}
                         {advance.attachments.length > 0 && (
                           <div className="mt-2 flex flex-col gap-1 items-end">
-                            {advance.attachments.map((attachment) => (
-                              <Button key={attachment.id} variant="link" size="sm" asChild>
-                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                  {attachment.fileName}
-                                </a>
-                              </Button>
-                            ))}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => showDriverAdvanceAttachments(advance)}
+                            >
+                              Xem chứng từ ({advance.attachments.length})
+                            </Button>
                           </div>
                         )}
                       </TableCell>
@@ -955,7 +1164,7 @@ const Accounting: React.FC = () => {
                 const driver = driversQ.data?.find((d) => d.id === payment.driverId);
                 return (
                   <TableRow key={payment.id}>
-                    <TableCell>{new Date(payment.collectedAt).toLocaleString('vi-VN')}</TableCell>
+                    <TableCell>{formatDateTime(payment.collectedAt)}</TableCell>
                     <TableCell>#{payment.tripId}</TableCell>
                     <TableCell className="flex items-center gap-2">
                       <span>{driver?.name || payment.driverId}</span>
@@ -1006,7 +1215,7 @@ const Accounting: React.FC = () => {
                 const driver = driversQ.data?.find((d) => d.id === deposit.driverId);
                 return (
                   <TableRow key={deposit.id}>
-                    <TableCell>{new Date(deposit.createdAt).toLocaleString('vi-VN')}</TableCell>
+                    <TableCell>{formatDateTime(deposit.createdAt)}</TableCell>
                     <TableCell>{driver?.name || deposit.driverId}</TableCell>
                     <TableCell className="text-right">{deposit.amount.toLocaleString('vi-VN')} ₫</TableCell>
                     <TableCell>
@@ -1032,6 +1241,291 @@ const Accounting: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!previewAdvance || !!driverAdvancePreview}
+        onOpenChange={(open) => {
+          if (!open && !customerAdvanceStatusMut.isPending && !driverAdvanceStatusMut.isPending) {
+            closeAdvancePreview();
+            setDriverAdvancePreview(null);
+            setActivePreviewTab('customer');
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Đối soát chứng từ</DialogTitle>
+          </DialogHeader>
+          <Tabs
+            value={activePreviewTab}
+            defaultValue="customer"
+            onValueChange={(value) => {
+              if (value === 'customer') {
+                if (previewAdvance) {
+                  setActivePreviewTab('customer');
+                }
+                return;
+              }
+              if (value === 'driver') {
+                if (driverAdvancePreview) {
+                  setActivePreviewTab('driver');
+                }
+              }
+            }}
+          >
+            <TabsList>
+              <TabsTrigger value="customer" disabled={!previewAdvance}>Ứng trước khách</TabsTrigger>
+              <TabsTrigger value="driver" disabled={!driverAdvancePreview}>Tạm ứng tài xế</TabsTrigger>
+            </TabsList>
+            <TabsContent value="customer">
+          {previewAdvance && (
+            <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
+              <div className="space-y-4">
+                {previewAttachments.length > 0 ? (
+                  <>
+                    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                      {activeCustomerAttachmentUrl ? (
+                        <img
+                          src={activeCustomerAttachmentUrl}
+                          alt={activeCustomerAttachment?.fileName ?? 'attachment'}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Không thể tải ảnh</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {previewAttachments.map((attachment, index) => {
+                        const previewUrl = customerAttachmentPreviewUrls[index] || attachment.downloadUrl;
+                        const isActive = index === previewImageIndex;
+                        return (
+                          <button
+                            key={attachment.id}
+                            type="button"
+                            onClick={() => setPreviewImageIndex(index)}
+                            className={`h-16 w-16 overflow-hidden rounded border ${
+                              isActive ? 'ring-2 ring-primary ring-offset-2' : 'opacity-80 hover:opacity-100'
+                            }`}
+                          >
+                            {previewUrl ? (
+                              <img
+                                src={previewUrl}
+                                alt={attachment.fileName}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center px-1 text-[10px] text-muted-foreground">
+                                Xem ảnh
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                    Không có chứng từ đính kèm
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Khách hàng</p>
+                  <p className="font-medium text-gray-900">{previewAdvance.customerName}</p>
+                  <p className="text-muted-foreground">{previewAdvance.customerPhone}</p>
+                </div>
+                {previewAdvance.tripId && (
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Chuyến liên quan</p>
+                    <p className="font-medium">#{previewAdvance.tripId}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-2">
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Số tiền</p>
+                    <p className="font-semibold text-gray-900">{previewAdvance.amount.toLocaleString('vi-VN')} ₫</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Hình thức</p>
+                    <p className="font-medium">{previewAdvance.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Trạng thái hiện tại</p>
+                    <Badge variant={customerStatusVariants[previewAdvance.status]}>
+                      {customerStatusLabels[previewAdvance.status]}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Ngày nhận</p>
+                    <p>{formatDateTime(previewAdvance.collectedAt)}</p>
+                  </div>
+                  {previewAdvance.receiptCode && (
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Mã phiếu/biên lai</p>
+                      <p className="font-medium">{previewAdvance.receiptCode}</p>
+                    </div>
+                  )}
+                </div>
+                {previewAdvance.note && (
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Ghi chú hiện tại</p>
+                    <p>{previewAdvance.note}</p>
+                  </div>
+                )}
+                {isApprovalMode && (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase text-muted-foreground">
+                      {previewAction === 'rejected' ? 'Lý do từ chối *' : 'Ghi chú phê duyệt (tuỳ chọn)'}
+                    </p>
+                    <Textarea
+                      value={approvalNote}
+                      onChange={(event) => setApprovalNote(event.target.value)}
+                      placeholder={previewAction === 'rejected' ? 'Nhập lý do từ chối phiếu' : 'Thêm ghi chú cho phiếu'}
+                      rows={4}
+                      disabled={customerAdvanceStatusMut.isPending}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={closeAdvancePreview}
+              disabled={customerAdvanceStatusMut.isPending}
+            >
+              Đóng
+            </Button>
+            {isApprovalMode && (
+              <Button
+                onClick={submitAdvanceApproval}
+                disabled={customerAdvanceStatusMut.isPending}
+              >
+                {previewAction === 'rejected'
+                  ? 'Xác nhận từ chối'
+                  : previewAction === 'reconciled'
+                    ? 'Xác nhận đã đối soát'
+                    : 'Chuyển kế toán'}
+              </Button>
+            )}
+          </DialogFooter>
+            </TabsContent>
+            <TabsContent value="driver">
+              {driverAdvancePreview ? (
+                <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
+                  <div className="space-y-4">
+                    {driverPreviewAttachments.length > 0 ? (
+                      <>
+                        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                          {activeDriverAttachmentUrl ? (
+                            <img
+                              src={activeDriverAttachmentUrl}
+                              alt={activeDriverAttachment?.fileName ?? 'attachment'}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Không thể tải ảnh</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {driverPreviewAttachments.map((attachment, index) => {
+                            const previewUrl = driverAttachmentPreviewUrls[index] || attachment.downloadUrl;
+                            const isActive = index === driverAdvanceImageIndex;
+                            return (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                onClick={() => setDriverAdvanceImageIndex(index)}
+                                className={`h-16 w-16 overflow-hidden rounded border ${
+                                  isActive ? 'ring-2 ring-primary ring-offset-2' : 'opacity-80 hover:opacity-100'
+                                }`}
+                              >
+                                {previewUrl ? (
+                                  <img
+                                    src={previewUrl}
+                                    alt={attachment.fileName}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center px-1 text-[10px] text-muted-foreground">
+                                    Xem ảnh
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                        Không có chứng từ đính kèm
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Tài xế</p>
+                      <p className="font-medium text-gray-900">#{driverAdvancePreview.driverId}</p>
+                      {driverAdvancePreview.tripId && (
+                        <p className="text-muted-foreground">Chuyến #{driverAdvancePreview.tripId}</p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Số tiền</p>
+                        <p className="font-semibold text-gray-900">{driverAdvancePreview.amount.toLocaleString('vi-VN')} ₫</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Loại phí</p>
+                        <p className="font-medium">{driverExpenseLabels[driverAdvancePreview.expenseType]}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Trạng thái hiện tại</p>
+                        <Badge variant={driverStatusVariants[driverAdvancePreview.status]}>
+                          {driverStatusLabels[driverAdvancePreview.status]}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Ngày yêu cầu</p>
+                        <p>{formatDateTime(driverAdvancePreview.requestedAt)}</p>
+                      </div>
+                    </div>
+                    {driverAdvancePreview.note && (
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Ghi chú</p>
+                        <p>{driverAdvancePreview.note}</p>
+                      </div>
+                    )}
+                    {driverAdvancePreview.rejectionReason && (
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Lý do từ chối</p>
+                        <p className="text-destructive">{driverAdvancePreview.rejectionReason}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-6 text-center text-muted-foreground">Không có dữ liệu</div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDriverAdvancePreview(null);
+                    setActivePreviewTab('customer');
+                    setDriverAdvanceImageIndex(0);
+                  }}
+                  disabled={driverAdvanceStatusMut.isPending}
+                >
+                  Đóng
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

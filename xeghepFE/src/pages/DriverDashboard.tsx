@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getTrips } from '@/data/trips';
+import { getTrips, type Trip } from '@/data/trips';
 import { Calendar, MapPin, Users, Clock, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { createDriverExpenseAdvance, getDriverExpenseAdvances, type DriverExpenseType, type DriverExpenseStatus } from '@/data/accounting';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
 const driverStatusLabels: Record<DriverExpenseStatus, string> = {
@@ -54,6 +54,7 @@ const DriverDashboard = () => {
   const [driverAdvanceImages, setDriverAdvanceImages] = useState<File[]>([]);
   const driverAdvanceFileInputRef = useRef<HTMLInputElement | null>(null);
   const [driverAdvanceImagesLoading, setDriverAdvanceImagesLoading] = useState(false);
+  const [selectedAdvanceTrip, setSelectedAdvanceTrip] = useState<Trip | null>(null);
   const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
   const driverId = user?.id ? user.id.toString() : '';
 
@@ -75,9 +76,11 @@ const DriverDashboard = () => {
       toast({ title: 'Đã gửi yêu cầu', description: 'Tạm ứng phí sẽ được kế toán xem xét' });
       setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
       setDriverAdvanceImages([]);
+      setSelectedAdvanceTrip(null);
       if (driverAdvanceFileInputRef.current) {
         driverAdvanceFileInputRef.current.value = '';
       }
+      setFinanceDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['driver-expense-advances', driverId] });
     },
     onError: (error: unknown) => {
@@ -88,11 +91,16 @@ const DriverDashboard = () => {
       });
     },
   });
-  const openFinanceDialog = () => {
+  const openAdvanceDialogForTrip = (trip: Trip) => {
     setDriverAdvanceImages([]);
     if (driverAdvanceFileInputRef.current) {
       driverAdvanceFileInputRef.current.value = '';
     }
+    setDriverAdvanceForm((prev) => ({
+      ...prev,
+      tripId: trip.id.toString(),
+    }));
+    setSelectedAdvanceTrip(trip);
     setFinanceDialogOpen(true);
   };
 
@@ -191,170 +199,6 @@ const DriverDashboard = () => {
           <h1 className="text-2xl font-bold text-gray-800">Lịch Trình Của Tôi</h1>
           <p className="text-sm text-muted-foreground">Xem và quản lý các chuyến đi được phân công</p>
         </div>
-        <Dialog
-          open={financeDialogOpen}
-          onOpenChange={(open) => {
-            setFinanceDialogOpen(open);
-            if (!open) {
-              setDriverAdvanceImages([]);
-              if (driverAdvanceFileInputRef.current) {
-                driverAdvanceFileInputRef.current.value = '';
-              }
-              setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button variant="outline" className="gap-2" onClick={openFinanceDialog}>
-              <Wallet size={18} />
-              Đề nghị tạm ứng
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Đề nghị tạm ứng phí tài xế</DialogTitle>
-            </DialogHeader>
-            <input
-              ref={driverAdvanceFileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleDriverAdvanceImagesSelect}
-            />
-                <form
-                  className="space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (!driverId) {
-                      toast({
-                        title: 'Không thể xác định tài khoản',
-                        description: 'Vui lòng đăng nhập lại',
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    const amount = Number(driverAdvanceForm.amount || 0);
-                    if (!amount || amount <= 0) {
-                      toast({
-                        title: 'Số tiền không hợp lệ',
-                        description: 'Nhập số tiền tạm ứng lớn hơn 0',
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    driverAdvanceMutation.mutate({
-                      driverId,
-                      amount,
-                      expenseType: driverAdvanceForm.expenseType,
-                      tripId: driverAdvanceForm.tripId.trim() || undefined,
-                      requestedBy: driverId,
-                      note: driverAdvanceForm.note.trim() || undefined,
-                      attachments: driverAdvanceImages,
-                    });
-                  }}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="driver-finance-request-amount">Số tiền (₫) *</Label>
-                      <Input
-                        id="driver-finance-request-amount"
-                        type="number"
-                        min={0}
-                        placeholder="VD: 150000"
-                        value={driverAdvanceForm.amount}
-                        onChange={(event) =>
-                          setDriverAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Loại chi phí *</Label>
-                      <Select
-                        value={driverAdvanceForm.expenseType}
-                        onValueChange={(value) =>
-                          setDriverAdvanceForm((prev) => ({ ...prev, expenseType: value as DriverExpenseType }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="toll">Phí cầu đường</SelectItem>
-                          <SelectItem value="parking">Phí bến bãi</SelectItem>
-                          <SelectItem value="fuel">Nhiên liệu</SelectItem>
-                          <SelectItem value="other">Khác</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="driver-finance-request-trip">Mã chuyến liên quan</Label>
-                      <Input
-                        id="driver-finance-request-trip"
-                        placeholder="VD: 123"
-                        value={driverAdvanceForm.tripId}
-                        onChange={(event) =>
-                          setDriverAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }))
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Ảnh chứng từ</Label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={driverAdvanceImagesLoading}
-                        onClick={() => driverAdvanceFileInputRef.current?.click()}
-                      >
-                        {driverAdvanceImages.length
-                          ? `Thay ảnh (${driverAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
-                          : 'Đính kèm ảnh (tối đa 3)'}
-                      </Button>
-                      {driverAdvanceImages.length > 0 && (
-                        <Button type="button" variant="ghost" onClick={() => setDriverAdvanceImages([])}>
-                          Xóa ảnh
-                        </Button>
-                      )}
-                      {driverAdvanceImagesLoading && (
-                        <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
-                      )}
-                    </div>
-                    {driverAdvanceImages.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {driverAdvanceImages.map((file, idx) => (
-                          <Badge key={`driver-advance-img-${idx}`} variant="outline">
-                            {file.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="driver-finance-request-note">Ghi chú kèm chứng từ</Label>
-                    <Textarea
-                      id="driver-finance-request-note"
-                      rows={3}
-                      placeholder="Ví dụ: phí cầu Phú Mỹ - có hóa đơn"
-                      value={driverAdvanceForm.note}
-                      onChange={(event) =>
-                        setDriverAdvanceForm((prev) => ({ ...prev, note: event.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      disabled={driverAdvanceMutation.isPending || driverAdvanceImagesLoading}
-                      className="min-w-32"
-                    >
-                      {driverAdvanceMutation.isPending ? 'Đang gửi...' : 'Gửi yêu cầu'}
-                    </Button>
-                  </div>
-                </form>
-          </DialogContent>
-        </Dialog>
       </header>
 
       <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
@@ -549,7 +393,7 @@ const DriverDashboard = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex flex-col gap-4 pt-4 border-t md:flex-row md:items-center md:justify-between">
                         <div className="flex items-center gap-6 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Users size={16} />
@@ -577,31 +421,42 @@ const DriverDashboard = () => {
                             )}
                           </div>
                         </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => openAdvanceDialogForTrip(trip)}
+                          >
+                            <Wallet size={16} />
+                            Tạm ứng phí
+                          </Button>
 
-                        {trip.status === 'Đã phân xe' && (
-                          <Link to={`/trip-execution/${trip.id}`}>
-                            <Button className="gap-2 bg-green-600 hover:bg-green-700">
-                              Bắt đầu chuyến
-                              <ArrowRight size={16} />
-                            </Button>
-                          </Link>
-                        )}
+                          {trip.status === 'Đã phân xe' && (
+                            <Link to={`/trip-execution/${trip.id}`}>
+                              <Button className="gap-2 bg-green-600 hover:bg-green-700">
+                                Bắt đầu chuyến
+                                <ArrowRight size={16} />
+                              </Button>
+                            </Link>
+                          )}
 
-                        {(trip.status === 'Đang đón' || trip.status === 'Đang đi') && (
-                          <Link to={`/trip-execution/${trip.id}`}>
-                            <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
-                              Tiếp tục
-                              <ArrowRight size={16} />
-                            </Button>
-                          </Link>
-                        )}
+                          {(trip.status === 'Đang đón' || trip.status === 'Đang đi') && (
+                            <Link to={`/trip-execution/${trip.id}`}>
+                              <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
+                                Tiếp tục
+                                <ArrowRight size={16} />
+                              </Button>
+                            </Link>
+                          )}
 
-                        {trip.status === 'Hoàn thành' && (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle size={20} />
-                            <span className="font-medium">Đã hoàn thành</span>
-                          </div>
-                        )}
+                          {trip.status === 'Hoàn thành' && (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <CheckCircle size={20} />
+                              <span className="font-medium">Đã hoàn thành</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {trip.notes && (
@@ -620,6 +475,181 @@ const DriverDashboard = () => {
           )}
         </div>
       </main>
+
+      <Dialog
+        open={financeDialogOpen}
+        onOpenChange={(open) => {
+          setFinanceDialogOpen(open);
+          if (!open) {
+            setSelectedAdvanceTrip(null);
+            setDriverAdvanceForm({ amount: '', expenseType: 'toll', tripId: '', note: '' });
+            setDriverAdvanceImages([]);
+            if (driverAdvanceFileInputRef.current) {
+              driverAdvanceFileInputRef.current.value = '';
+            }
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Đề nghị tạm ứng phí cho chuyến #{selectedAdvanceTrip?.id ?? ''}</DialogTitle>
+          </DialogHeader>
+          <input
+            ref={driverAdvanceFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleDriverAdvanceImagesSelect}
+          />
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!driverId || !selectedAdvanceTrip) {
+                toast({
+                  title: 'Thiếu thông tin chuyến',
+                  description: 'Vui lòng chọn lại chuyến cần tạm ứng',
+                  variant: 'destructive',
+                });
+                return;
+              }
+              const amount = Number(driverAdvanceForm.amount || 0);
+              if (!amount || amount <= 0) {
+                toast({
+                  title: 'Số tiền không hợp lệ',
+                  description: 'Nhập số tiền tạm ứng lớn hơn 0',
+                  variant: 'destructive',
+                });
+                return;
+              }
+              driverAdvanceMutation.mutate({
+                driverId,
+                tripId: selectedAdvanceTrip.id,
+                amount,
+                expenseType: driverAdvanceForm.expenseType,
+                requestedBy: driverId,
+                note: driverAdvanceForm.note.trim() || undefined,
+                attachments: driverAdvanceImages,
+              });
+            }}
+          >
+            <div className="grid grid-cols-1 gap-3 text-sm">
+              <div className="space-y-1">
+                <p className="text-xs uppercase text-muted-foreground">Chuyến</p>
+                <p className="font-medium text-gray-900">
+                  {selectedAdvanceTrip ? `#${selectedAdvanceTrip.id}` : '--'}
+                </p>
+                {selectedAdvanceTrip && (
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedAdvanceTrip.pickupTime).toLocaleString('vi-VN', { hour12: false })}
+                  </p>
+                )}
+              </div>
+              {selectedAdvanceTrip && (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>Điểm đón: <span className="text-gray-900">{selectedAdvanceTrip.pickupLocation}</span></p>
+                  <p>Điểm trả: <span className="text-gray-900">{selectedAdvanceTrip.dropoffLocation}</span></p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="driver-advance-amount">Số tiền (₫) *</Label>
+                <Input
+                  id="driver-advance-amount"
+                  type="number"
+                  min={0}
+                  value={driverAdvanceForm.amount}
+                  onChange={(event) => setDriverAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))}
+                  placeholder="Ví dụ: 150000"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="driver-advance-expense">Loại chi phí *</Label>
+                <Select
+                  value={driverAdvanceForm.expenseType}
+                  onValueChange={(value) =>
+                    setDriverAdvanceForm((prev) => ({ ...prev, expenseType: value as DriverExpenseType }))
+                  }
+                >
+                  <SelectTrigger id="driver-advance-expense">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="toll">Phí cầu đường</SelectItem>
+                    <SelectItem value="parking">Phí bến bãi</SelectItem>
+                    <SelectItem value="fuel">Nhiên liệu</SelectItem>
+                    <SelectItem value="other">Khác</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Ảnh chứng từ</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={driverAdvanceImagesLoading}
+                  onClick={() => driverAdvanceFileInputRef.current?.click()}
+                >
+                  {driverAdvanceImages.length
+                    ? `Thay ảnh (${driverAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
+                    : 'Đính kèm ảnh (tối đa 3)'}
+                </Button>
+                {driverAdvanceImages.length > 0 && (
+                  <Button type="button" variant="ghost" onClick={() => setDriverAdvanceImages([])}>
+                    Xóa ảnh
+                  </Button>
+                )}
+                {driverAdvanceImagesLoading && (
+                  <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
+                )}
+              </div>
+              {driverAdvanceImages.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {driverAdvanceImages.map((file, idx) => (
+                    <Badge key={`driver-advance-img-${idx}`} variant="outline">
+                      {file.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="driver-advance-note">Ghi chú</Label>
+              <Textarea
+                id="driver-advance-note"
+                rows={3}
+                placeholder="Ví dụ: ứng phí cầu đường trước khi đi"
+                value={driverAdvanceForm.note}
+                onChange={(event) => setDriverAdvanceForm((prev) => ({ ...prev, note: event.target.value }))}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFinanceDialogOpen(false)}
+                disabled={driverAdvanceMutation.isPending}
+              >
+                Hủy
+              </Button>
+              <Button
+                type="submit"
+                disabled={driverAdvanceMutation.isPending || driverAdvanceImagesLoading || !selectedAdvanceTrip}
+              >
+                {driverAdvanceMutation.isPending ? 'Đang gửi...' : 'Gửi yêu cầu'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

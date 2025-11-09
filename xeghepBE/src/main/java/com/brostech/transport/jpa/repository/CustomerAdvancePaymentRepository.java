@@ -11,6 +11,8 @@ import java.util.List;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.brostech.transport.jpa.entity.CustomerAdvancePayment.Status;
+
 public interface CustomerAdvancePaymentRepository extends JpaRepository<CustomerAdvancePayment, Long> {
 
     Page<CustomerAdvancePayment> findByStatus(CustomerAdvancePayment.Status status, Pageable pageable);
@@ -28,4 +30,9 @@ public interface CustomerAdvancePaymentRepository extends JpaRepository<Customer
 
     @Query("select coalesce(sum(c.amount), 0) from CustomerAdvancePayment c where c.tripId = :tripId and c.status in :statuses")
     Double sumAmountByTripIdAndStatuses(@Param("tripId") Long tripId, @Param("statuses") Collection<CustomerAdvancePayment.Status> statuses);
+
+    @Query("select coalesce(sum(c.amount), 0) " +
+            "from CustomerAdvancePayment c, Trip t " +
+            "where c.tripId = t.id and t.driverId = :driverId and c.status = :status")
+    Double sumAmountByDriverIdAndStatus(@Param("driverId") Long driverId, @Param("status") Status status);
 }

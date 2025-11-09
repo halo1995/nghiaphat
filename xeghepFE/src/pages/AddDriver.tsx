@@ -245,16 +245,6 @@ const AddDriver = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="vehicleId">ID xe đang lái (tùy chọn)</Label>
-                  <Input
-                    id="vehicleId"
-                    value={formData.vehicleId}
-                    onChange={(e) => handleChange('vehicleId', e.target.value)}
-                    placeholder="VD: 1"
-                  />
-                </div>
-
                 <div className="flex gap-4">
                   <Button
                     type="submit"

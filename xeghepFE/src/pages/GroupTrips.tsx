@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -77,9 +77,25 @@ const GroupTrips = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const lockedTripIds = useMemo(() => new Set<string>(
+    trips
+      .filter((trip) =>
+        trip.pickupConfirmed === true ||
+        ['Đang đón', 'Đang đi', 'Hoàn thành'].includes(trip.status)
+      )
+      .map((trip) => trip.id)
+  ), [trips]);
+
+  const isGroupLocked = useCallback((group: TripGroup) => {
+    return group.tripIds.some((tripId) => lockedTripIds.has(tripId));
+  }, [lockedTripIds]);
+
   const availableTrips = useMemo(() => {
     if (!editingGroup) return [] as Trip[];
     return trips.filter((trip: Trip) => {
+      if (trip.pickupConfirmed === true) {
+        return false;
+      }
       if (trip.groupId === editingGroup.id) {
         return true;
       }
@@ -136,6 +152,8 @@ const GroupTrips = () => {
   const totalRevenue = useMemo(() => {
     return selectedTripDetails.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
   }, [selectedTripDetails]);
+
+  const editingGroupLocked = editingGroup ? isGroupLocked(editingGroup) : false;
 
   interface EditPayload {
     group: TripGroup;
@@ -316,10 +334,26 @@ const GroupTrips = () => {
   };
 
   const handleRemoveTrip = (group: TripGroup, tripId: string) => {
+    if (isGroupLocked(group)) {
+      toast({
+        title: 'Không thể chỉnh sửa',
+        description: 'Tài xế đã xác nhận đón khách, không thể thay đổi nhóm chuyến.',
+        variant: 'destructive',
+      });
+      return;
+    }
     removeTripMutation.mutate({ group, tripId });
   };
 
   const handleDeleteGroup = (group: TripGroup) => {
+    if (isGroupLocked(group)) {
+      toast({
+        title: 'Không thể xoá nhóm',
+        description: 'Không thể xoá nhóm sau khi tài xế đã xác nhận đón hành khách.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!window.confirm('Bạn chắc chắn muốn xoá nhóm này? Tất cả các chuyến sẽ trở lại trạng thái chờ xác nhận.')) {
       return;
     }
@@ -327,12 +361,28 @@ const GroupTrips = () => {
   };
 
   const handleToggleTrip = (tripId: string) => {
+    if (editingGroupLocked) {
+      toast({
+        title: 'Không thể chỉnh sửa',
+        description: 'Nhóm đã bị khoá vì tài xế đã xác nhận đón hành khách.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSelectedTripIds((prev) =>
       prev.includes(tripId) ? prev.filter((id) => id !== tripId) : [...prev, tripId]
     );
   };
 
   const handleOpenEdit = (group: TripGroup) => {
+    if (isGroupLocked(group)) {
+      toast({
+        title: 'Không thể chỉnh sửa',
+        description: 'Nhóm chuyến đã khoá vì tài xế đã xác nhận đón hành khách.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setEditingGroup(group);
     setSelectedTripIds([...group.tripIds]);
     setSelectedVehicleId(group.vehicleId ?? 'none');
@@ -342,6 +392,16 @@ const GroupTrips = () => {
 
   const handleSave = () => {
     if (!editingGroup) return;
+    if (isGroupLocked(editingGroup)) {
+      toast({
+        title: 'Không thể lưu thay đổi',
+        description: 'Nhóm đã bị khoá vì tài xế đã xác nhận đón khách.',
+        variant: 'destructive',
+      });
+      setIsDialogOpen(false);
+      resetEditState();
+      return;
+    }
     if (selectedTripIds.length === 0) {
       toast({
         title: 'Chưa chọn chuyến',
@@ -463,7 +523,8 @@ const GroupTrips = () => {
             <div className="grid grid-cols-1 gap-6">
       {filteredGroups.map((group, index) => {
         const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
-        const canEditGroup = group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
+        const groupLocked = isGroupLocked(group);
+        const canEditGroup = !groupLocked && group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
                 
                 return (
                   <motion.div
@@ -496,7 +557,9 @@ const GroupTrips = () => {
                               title={
                                 canEditGroup
                                   ? 'Chỉnh sửa nhóm chuyến'
-                                  : 'Không thể chỉnh sửa khi nhóm đang chạy hoặc đã hoàn thành'
+                                  : groupLocked
+                                    ? 'Không thể chỉnh sửa khi tài xế đã xác nhận đón khách'
+                                    : 'Không thể chỉnh sửa khi nhóm đang chạy hoặc đã hoàn thành'
                               }
                             >
                               <Pencil size={16} />
@@ -507,12 +570,19 @@ const GroupTrips = () => {
                               size="sm"
                               className="gap-1 text-red-600 hover:text-red-700"
                               onClick={() => handleDeleteGroup(group)}
-                              disabled={isDeletingGroup}
+                              disabled={isDeletingGroup || groupLocked}
+                              title={groupLocked ? 'Không thể xoá nhóm vì tài xế đã xác nhận đón khách' : undefined}
                             >
                               Xoá
                             </Button>
                           </div>
                         </div>
+                        {groupLocked && (
+                          <div className="mb-4 flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm text-orange-700">
+                            <AlertTriangle size={16} />
+                            Tài xế đã xác nhận đón khách. Nhóm này đã bị khoá và không thể chỉnh sửa.
+                          </div>
+                        )}
 
                         {/* Stats */}
                         <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
@@ -598,7 +668,7 @@ const GroupTrips = () => {
                                     size="sm"
                                     className="text-red-600 hover:text-red-700"
                                     onClick={() => handleRemoveTrip(group, trip.id)}
-                                    disabled={isRemovingTrip}
+                                    disabled={isRemovingTrip || groupLocked}
                                   >
                                     Loại bỏ
                                   </Button>
@@ -636,6 +706,12 @@ const GroupTrips = () => {
           </DialogHeader>
           {editingGroup && (
             <div className="space-y-6">
+              {editingGroupLocked && (
+                <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm text-orange-700">
+                  <AlertTriangle size={16} />
+                  Nhóm đã bị khoá vì tài xế đã xác nhận đón khách. Bạn chỉ có thể xem thông tin.
+                </div>
+              )}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label>Chọn chuyến trong nhóm</Label>
@@ -664,7 +740,7 @@ const GroupTrips = () => {
                             <Checkbox
                               checked={checked}
                               onCheckedChange={() => !disabled && handleToggleTrip(trip.id)}
-                              disabled={disabled || isEditing}
+                              disabled={disabled || isEditing || editingGroupLocked}
                               className="mt-1"
                             />
                             <div className="flex-1">
@@ -703,7 +779,7 @@ const GroupTrips = () => {
                       setSelectedVehicleId(value);
                       setSelectedDriverId('none');
                     }}
-                    disabled={isEditing}
+                    disabled={isEditing || editingGroupLocked}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chưa phân xe" />
@@ -723,7 +799,7 @@ const GroupTrips = () => {
                   <Select
                     value={selectedDriverId}
                     onValueChange={(value) => setSelectedDriverId(value)}
-                    disabled={isEditing || selectedVehicleId === 'none'}
+                    disabled={isEditing || selectedVehicleId === 'none' || editingGroupLocked}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chưa phân tài xế" />
@@ -767,7 +843,7 @@ const GroupTrips = () => {
                 <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isEditing}>
                   Hủy
                 </Button>
-                <Button onClick={handleSave} disabled={isEditing} className="gap-2">
+                <Button onClick={handleSave} disabled={isEditing || editingGroupLocked} className="gap-2">
                   {isEditing && <Loader2 className="h-4 w-4 animate-spin" />}
                   Lưu thay đổi
                 </Button>

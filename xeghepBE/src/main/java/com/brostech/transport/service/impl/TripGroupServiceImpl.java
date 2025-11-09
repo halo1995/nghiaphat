@@ -2,6 +2,7 @@ package com.brostech.transport.service.impl;
 
 import com.brostech.transport.dto.trip.TripGroupDTO;
 import com.brostech.transport.dto.trip.TripGroupRequest;
+import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripGroup;
 import com.brostech.transport.jpa.repository.TripGroupRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
@@ -17,7 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * TripGroupServiceImpl
@@ -39,6 +45,8 @@ public class TripGroupServiceImpl implements TripGroupService {
     private final TripRepository tripRepository;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static final Set<Trip.TripStatus> DRIVER_CONFIRMED_STATUSES =
+            EnumSet.of(Trip.TripStatus.DANG_DON, Trip.TripStatus.DANG_DI, Trip.TripStatus.HOAN_THANH);
 
     @Override
     public TripGroupDTO create(TripGroupRequest req) {
@@ -85,6 +93,11 @@ public class TripGroupServiceImpl implements TripGroupService {
         TripGroup group = tripGroupRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
 
+        assertGroupEditable(group);
+        if (req.getTripIds() != null) {
+            assertTripIdsEditable(req.getTripIds());
+        }
+
         group.setName(req.getName());
         group.setTripIds(req.getTripIds());
         group.setVehicleId(req.getVehicleId());
@@ -103,9 +116,9 @@ public class TripGroupServiceImpl implements TripGroupService {
 
     @Override
     public void delete(Long id) {
-        if (!tripGroupRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found");
-        }
+        TripGroup group = tripGroupRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
+        assertGroupEditable(group);
         tripGroupRepository.deleteById(id);
     }
 
@@ -113,6 +126,8 @@ public class TripGroupServiceImpl implements TripGroupService {
     public TripGroupDTO assignVehicle(Long groupId, Long vehicleId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
+
+        assertGroupEditable(group);
         
         var vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid vehicleId"));
@@ -129,6 +144,8 @@ public class TripGroupServiceImpl implements TripGroupService {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
         
+        assertGroupEditable(group);
+        
         var driver = userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
         
@@ -144,8 +161,14 @@ public class TripGroupServiceImpl implements TripGroupService {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
         
+        assertGroupEditable(group);
+        
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+
+        if (Boolean.TRUE.equals(trip.getPickupConfirmed())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
+        }
         
         String currentTripIds = group.getTripIds();
         if (currentTripIds == null || currentTripIds.trim().isEmpty()) {
@@ -155,8 +178,8 @@ public class TripGroupServiceImpl implements TripGroupService {
         }
         
         group.setTripIds(currentTripIds);
-        group.setTotalPassengers(group.getTotalPassengers() + trip.getPassengers());
-        group.setTotalRevenue(group.getTotalRevenue() + trip.getPrice().doubleValue());
+        group.setTotalPassengers((group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) + trip.getPassengers());
+        group.setTotalRevenue((group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) + trip.getPrice().doubleValue());
         
         group = tripGroupRepository.save(group);
         return toDTO(group);
@@ -166,6 +189,8 @@ public class TripGroupServiceImpl implements TripGroupService {
     public TripGroupDTO removeTrip(Long groupId, Long tripId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
+        
+        assertGroupEditable(group);
         
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
@@ -183,8 +208,8 @@ public class TripGroupServiceImpl implements TripGroupService {
                 }
             }
             group.setTripIds(newTripIds.toString());
-            group.setTotalPassengers(Math.max(0, group.getTotalPassengers() - trip.getPassengers()));
-            group.setTotalRevenue(Math.max(0, group.getTotalRevenue() - trip.getPrice().doubleValue()));
+            group.setTotalPassengers(Math.max(0, (group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) - trip.getPassengers()));
+            group.setTotalRevenue(Math.max(0.0, (group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) - trip.getPrice().doubleValue()));
         }
         
         group = tripGroupRepository.save(group);
@@ -210,5 +235,52 @@ public class TripGroupServiceImpl implements TripGroupService {
     private String formatDate(Date date) {
         if (date == null) return null;
         return dateFormat.format(date);
+    }
+
+    private void assertGroupEditable(TripGroup group) {
+        if (group == null) {
+            return;
+        }
+        List<Long> tripIds = parseTripIds(group.getTripIds());
+        if (tripIds.isEmpty()) {
+            return;
+        }
+        boolean locked = tripRepository.findAllById(tripIds).stream().anyMatch(this::isTripLocked);
+        if (locked) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa nhóm sau khi tài xế đã xác nhận đón khách");
+        }
+    }
+
+    private void assertTripIdsEditable(String tripIds) {
+        List<Long> ids = parseTripIds(tripIds);
+        if (ids.isEmpty()) {
+            return;
+        }
+        boolean locked = tripRepository.findAllById(ids).stream().anyMatch(this::isTripLocked);
+        if (locked) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
+        }
+    }
+
+    private List<Long> parseTripIds(String tripIds) {
+        if (tripIds == null || tripIds.trim().isEmpty()) {
+            return List.of();
+        }
+        return Arrays.stream(tripIds.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(Long::valueOf)
+                .collect(Collectors.toList());
+    }
+
+    private boolean isTripLocked(Trip trip) {
+        if (trip == null) {
+            return false;
+        }
+        if (Boolean.TRUE.equals(trip.getPickupConfirmed())) {
+            return true;
+        }
+        Trip.TripStatus status = trip.getStatus();
+        return status != null && DRIVER_CONFIRMED_STATUSES.contains(status);
     }
 }

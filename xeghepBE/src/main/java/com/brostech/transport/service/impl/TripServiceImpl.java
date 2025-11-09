@@ -25,9 +25,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Arrays;
 
 /**
  * TripServiceImpl
@@ -364,16 +365,31 @@ public class TripServiceImpl implements TripService {
         if (trip.getDriverId() == null || trip.getPrice() == null || trip.getPrice().signum() <= 0) {
             return;
         }
+
         List<TripPayment> existing = tripPaymentRepository.findByTripId(trip.getId());
         if (!existing.isEmpty()) {
+            return;
+        }
+
+        double totalAdvance = safeSum(customerAdvancePaymentRepository.sumAmountByTripIdAndStatuses(
+                trip.getId(),
+                Arrays.asList(
+                        CustomerAdvancePayment.Status.PENDING,
+                        CustomerAdvancePayment.Status.SUBMITTED,
+                        CustomerAdvancePayment.Status.RECONCILED
+                )
+        ));
+
+        double netAmount = trip.getPrice().doubleValue() - totalAdvance;
+        if (netAmount <= 0.0) {
             return;
         }
 
         TripPaymentRequest request = new TripPaymentRequest();
         request.setTripId(trip.getId());
         request.setDriverId(trip.getDriverId());
-        request.setAmount(trip.getPrice().doubleValue());
+        request.setAmount(netAmount);
         request.setMethod(TripPayment.PaymentMethod.CASH);
-        paymentService.createTripPayment(request, java.util.Collections.emptyList());
+        paymentService.createTripPayment(request, Collections.emptyList());
     }
 }

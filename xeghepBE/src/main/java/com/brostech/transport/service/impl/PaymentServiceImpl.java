@@ -239,7 +239,11 @@ public class PaymentServiceImpl implements PaymentService {
                 advance.setSubmittedAt(now);
                 advance.setSubmittedBy(req.getActionUserId());
             }
-            case RECONCILED, REJECTED -> {
+            case RECONCILED -> {
+                advance.setReconciledAt(now);
+                advance.setReconciledBy(req.getActionUserId());
+            }
+            case REJECTED -> {
                 advance.setReconciledAt(now);
                 advance.setReconciledBy(req.getActionUserId());
             }
@@ -251,6 +255,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         advance.setStatus(targetStatus);
         advance = customerAdvancePaymentRepository.save(advance);
+
+        if (targetStatus == CustomerAdvancePayment.Status.RECONCILED) {
+            applyCustomerAdvanceReconciliationImpact(advance);
+        }
+
         return toCustomerAdvancePaymentDTO(advance);
     }
 
@@ -332,19 +341,17 @@ public class PaymentServiceImpl implements PaymentService {
             case APPROVED -> {
                 advance.setApprovedAt(now);
                 advance.setApprovedBy(req.getActionUserId());
-                adjustDriverOutstanding(driver, advance.getAmount());
+                adjustDriverOutstanding(driver, -advance.getAmount());
                 userRepository.save(driver);
             }
             case DEDUCTED -> {
                 advance.setDeductedAt(now);
                 advance.setDeductedBy(req.getActionUserId());
-                adjustDriverOutstanding(driver, -advance.getAmount());
-                userRepository.save(driver);
             }
             case REJECTED -> {
                 advance.setRejectionReason(req.getRejectionReason());
                 if (advance.getStatus() == DriverExpenseAdvance.Status.APPROVED) {
-                    adjustDriverOutstanding(driver, -advance.getAmount());
+                    adjustDriverOutstanding(driver, advance.getAmount());
                     userRepository.save(driver);
                 }
             }
@@ -446,6 +453,29 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
     
+    private void applyCustomerAdvanceReconciliationImpact(CustomerAdvancePayment advance) {
+        if (advance.getTripId() == null) {
+            return;
+        }
+
+        tripRepository.findById(advance.getTripId()).ifPresent(trip -> {
+            Long driverId = trip.getDriverId();
+            if (driverId == null) {
+                return;
+            }
+
+            userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
+                    .ifPresent(driver -> {
+                        double amount = Objects.requireNonNullElse(advance.getAmount(), 0.0);
+                        if (amount <= 0) {
+                            return;
+                        }
+                        adjustDriverOutstanding(driver, -amount);
+                        userRepository.save(driver);
+                    });
+        });
+    }
+
     private List<PaymentAttachmentDTO> toAttachmentDTOs(PaymentAttachment.ReferenceType referenceType, Long referenceId) {
         if (referenceId == null) {
             return List.of();
@@ -491,6 +521,7 @@ public class PaymentServiceImpl implements PaymentService {
         double totalOutstanding = 0;
         double totalCustomerPrepaidPending = sumCustomerAdvances(CustomerAdvancePayment.Status.PENDING);
         double totalCustomerPrepaidSubmitted = sumCustomerAdvances(CustomerAdvancePayment.Status.SUBMITTED);
+        double totalCustomerAdvanceReconciledForDrivers = 0;
         double totalDriverAdvanceOutstanding = 0;
         long totalCompletedTrips = 0;
         List<DriverAccountingSummaryDTO> summaries = new ArrayList<>();
@@ -501,13 +532,17 @@ public class PaymentServiceImpl implements PaymentService {
             double driverAdvanceOutstanding = sumDriverAdvances(driver.getId(), List.of(DriverExpenseAdvance.Status.APPROVED));
 
             double collected = payments.stream().mapToDouble(TripPayment::getAmount).sum();
-            double deposited = deposits.stream().mapToDouble(DepositRecord::getAmount).sum();
+            double depositAmount = deposits.stream().mapToDouble(DepositRecord::getAmount).sum();
+            double reconciledAdvances = sumCustomerAdvancesForDriver(driver.getId(), CustomerAdvancePayment.Status.RECONCILED);
+            double grossDeposited = depositAmount + reconciledAdvances;
+            double netDeposited = Math.max(grossDeposited - driverAdvanceOutstanding, 0);
             double outstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
             long completedTrips = countCompletedTrips(driver.getId(), fromDate, toDate);
 
             totalCollected += collected;
-            totalDeposited += deposited;
+            totalDeposited += netDeposited;
             totalOutstanding += outstanding;
+            totalCustomerAdvanceReconciledForDrivers += reconciledAdvances;
             totalDriverAdvanceOutstanding += driverAdvanceOutstanding;
             totalCompletedTrips += completedTrips;
 
@@ -515,11 +550,17 @@ public class PaymentServiceImpl implements PaymentService {
                     .driverId(driver.getId())
                     .driverName(driver.getName())
                     .totalCollected(collected)
-                    .totalDeposited(deposited)
+                    .totalDeposited(netDeposited)
                     .outstanding(outstanding)
                     .completedTrips(completedTrips)
                     .advanceOutstanding(driverAdvanceOutstanding)
                     .build());
+        }
+
+        double totalCustomerAdvanceReconciled = sumCustomerAdvances(CustomerAdvancePayment.Status.RECONCILED);
+        double reconciledWithoutDriver = totalCustomerAdvanceReconciled - totalCustomerAdvanceReconciledForDrivers;
+        if (reconciledWithoutDriver > 0) {
+            totalDeposited += reconciledWithoutDriver;
         }
 
         return AccountingSummaryDTO.builder()
@@ -562,6 +603,14 @@ public class PaymentServiceImpl implements PaymentService {
         return customerAdvancePaymentRepository.findByStatus(status).stream()
                 .mapToDouble(CustomerAdvancePayment::getAmount)
                 .sum();
+    }
+
+    private double sumCustomerAdvancesForDriver(Long driverId, CustomerAdvancePayment.Status status) {
+        if (driverId == null) {
+            return 0;
+        }
+        Double total = customerAdvancePaymentRepository.sumAmountByDriverIdAndStatus(driverId, status);
+        return total != null ? total : 0;
     }
 
     private double sumDriverAdvances(Long driverId, Collection<DriverExpenseAdvance.Status> statuses) {
