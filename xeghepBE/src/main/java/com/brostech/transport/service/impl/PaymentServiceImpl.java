@@ -268,7 +268,7 @@ public class PaymentServiceImpl implements PaymentService {
         advance = customerAdvancePaymentRepository.save(advance);
 
         if (targetStatus == CustomerAdvancePayment.Status.RECONCILED) {
-            applyCustomerAdvanceReconciliationImpact(advance);
+            applyCustomerAdvanceReconciliationImpact(advance, req.getActionUserId());
         }
 
         return toCustomerAdvancePaymentDTO(advance);
@@ -477,7 +477,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
     
-    private void applyCustomerAdvanceReconciliationImpact(CustomerAdvancePayment advance) {
+    private void applyCustomerAdvanceReconciliationImpact(CustomerAdvancePayment advance, Long actorId) {
         if (advance.getTripId() == null) {
             return;
         }
@@ -500,7 +500,7 @@ public class PaymentServiceImpl implements PaymentService {
                                 "Đối soát tạm ứng khách",
                                 PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE,
                                 advance.getId(),
-                                advance.getCollectedBy());
+                                actorId);
                     });
         });
     }
