@@ -20,7 +20,7 @@ spring:
   datasource:
     url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/postgres}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:123456}
+    password: ${POSTGRES_PASSWORD:Xf(I=1p*e<$+A(B7^dGi}
   jpa:
     show-sql: false
     hibernate:

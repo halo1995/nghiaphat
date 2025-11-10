@@ -13,6 +13,7 @@ import org.springframework.util.DigestUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
@@ -89,7 +90,7 @@ public class PaymentAttachmentService {
                     .referenceType(referenceType)
                     .referenceId(referenceId)
                     .fileName(sanitizedName)
-                    .storagePath(baseDir.relativize(target).toString())
+                    .storagePath(normalizeStoragePath(baseDir.relativize(target)))
                     .contentType(file.getContentType())
                     .sizeBytes(file.getSize())
                     .checksum(calculateChecksum(file))
@@ -128,7 +129,8 @@ public class PaymentAttachmentService {
 
     @Transactional(readOnly = true)
     public Resource loadAsResource(PaymentAttachment attachment) {
-        Path filePath = resolveBaseDir().resolve(attachment.getStoragePath()).normalize();
+        Path baseDir = resolveBaseDir();
+        Path filePath = baseDir.resolve(resolveStoredRelativePath(attachment.getStoragePath())).normalize();
         try {
             Resource resource = new UrlResource(filePath.toUri());
             if (!resource.exists() || !resource.isReadable()) {
@@ -161,7 +163,8 @@ public class PaymentAttachmentService {
     }
 
     private boolean deletePhysicalFile(PaymentAttachment attachment) {
-        Path filePath = resolveBaseDir().resolve(attachment.getStoragePath()).normalize();
+        Path baseDir = resolveBaseDir();
+        Path filePath = baseDir.resolve(resolveStoredRelativePath(attachment.getStoragePath())).normalize();
         return deleteQuietly(filePath);
     }
 
@@ -173,6 +176,15 @@ public class PaymentAttachmentService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể tạo thư mục lưu ảnh", e);
         }
         return baseDir;
+    }
+
+    private String normalizeStoragePath(Path relativePath) {
+        return relativePath.toString().replace(File.separatorChar, '/');
+    }
+
+    private Path resolveStoredRelativePath(String storedPath) {
+        String normalized = storedPath.replace("\\", "/");
+        return Paths.get(normalized);
     }
 
     private String sanitizeFileName(String original) {
