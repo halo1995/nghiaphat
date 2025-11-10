@@ -1,4 +1,5 @@
 import { apiService } from '@/services/apiService';
+import { API_BASE_URL } from '@/services/api';
 import type {
   AccountingSummaryResponse,
   DepositRecordResponse,
@@ -16,6 +17,41 @@ import type {
   DriverExpenseStatus as ApiDriverExpenseStatus,
   DriverExpenseType as ApiDriverExpenseType,
 } from '@/services/api';
+
+const secureAttachmentUrl = (url: string): string => {
+  if (!url) {
+    return url;
+  }
+  const prefersHttps =
+    (typeof window !== 'undefined' && window.location.protocol === 'https:')
+    || API_BASE_URL.startsWith('https://');
+  if (!prefersHttps) {
+    return url;
+  }
+  if (
+    url.startsWith('https://')
+    || url.startsWith('data:')
+    || url.startsWith('blob:')
+  ) {
+    return url;
+  }
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : API_BASE_URL;
+    const resolved = new URL(url, base);
+    if (resolved.protocol === 'http:') {
+      resolved.protocol = 'https:';
+    }
+    return resolved.toString();
+  } catch (_error) {
+    if (url.startsWith('http://')) {
+      return `https://${url.slice('http://'.length)}`;
+    }
+    return url;
+  }
+};
 
 export type PaymentMethod = 'cash' | 'transfer';
 
@@ -127,7 +163,7 @@ const mapAttachment = (attachment: PaymentAttachmentResponse): PaymentAttachment
   sizeBytes: attachment.sizeBytes,
   createdAt: attachment.createdAt,
   expiresAt: attachment.expiresAt ?? undefined,
-  downloadUrl: attachment.downloadUrl,
+  downloadUrl: secureAttachmentUrl(attachment.downloadUrl),
 });
 
 const mapTripPayment = (payment: TripPaymentResponse): TripPayment => ({
