@@ -65,6 +65,7 @@ public class PaymentAttachment {
         TRIP_PAYMENT,
         DEPOSIT_RECORD,
         CUSTOMER_ADVANCE,
-        DRIVER_EXPENSE_ADVANCE
+        DRIVER_EXPENSE_ADVANCE,
+        EXPENSE_VOUCHER
     }
 }

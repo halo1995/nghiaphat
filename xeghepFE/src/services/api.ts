@@ -333,6 +333,88 @@ export interface DriverExpenseAdvanceStatusUpdateRequest {
   rejectionReason?: string | null;
 }
 
+export type ExpenseVoucherStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export type ExpenseVoucherCategory =
+  | 'OFFICE_RENT'
+  | 'ELECTRICITY'
+  | 'WATER'
+  | 'SALARY'
+  | 'DRIVER_ADVANCE'
+  | 'OPERATIONS'
+  | 'OTHER';
+
+export interface ExpenseVoucherResponse {
+  id: number;
+  code: string;
+  title: string;
+  category: ExpenseVoucherCategory;
+  amount: number;
+  payeeName: string;
+  payeeAccount: string | null;
+  description: string | null;
+  note: string | null;
+  status: ExpenseVoucherStatus;
+  walletId: number;
+  walletName: string | null;
+  driverExpenseAdvanceId: number | null;
+  createdBy: number;
+  createdByName: string | null;
+  createdAt: string;
+  submittedBy: number | null;
+  submittedByName: string | null;
+  submittedAt: string | null;
+  approvedBy: number | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  rejectedBy: number | null;
+  rejectedByName: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  attachments: PaymentAttachmentResponse[];
+}
+
+export interface ExpenseVoucherRequestPayload {
+  title: string;
+  category: ExpenseVoucherCategory;
+  amount: number;
+  payeeName: string;
+  payeeAccount?: string | null;
+  description?: string | null;
+  note?: string | null;
+  actorId: number;
+  walletId?: number | null;
+  driverExpenseAdvanceId?: number | null;
+  submitImmediately?: boolean;
+}
+
+export interface ExpenseVoucherStatusUpdatePayload {
+  status: ExpenseVoucherStatus;
+  actionUserId: number;
+  note?: string | null;
+  rejectionReason?: string | null;
+}
+
+export interface ExpenseVoucherHistoryResponse {
+  id: number;
+  fromStatus: ExpenseVoucherStatus | null;
+  toStatus: ExpenseVoucherStatus;
+  note: string | null;
+  actionBy: number | null;
+  actionByName: string | null;
+  actionAt: string;
+}
+
+export interface ExpenseSummaryResponse {
+  totalApproved: number;
+  totalPending: number;
+  totalRejected: number;
+  pendingCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  walletBalance: number;
+}
+
 export interface DriverAccountingSummaryResponse {
   driverId: number;
   driverName: string;

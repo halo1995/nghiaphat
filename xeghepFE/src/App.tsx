@@ -31,6 +31,7 @@ import NotFound from "@/pages/NotFound";
 import AddDriver from "@/pages/AddDriver";
 import AddCustomer from "@/pages/AddCustomer";
 import Accounting from "@/pages/Accounting";
+import ExpenseVouchers from "@/pages/ExpenseVouchers";
 import Users from "@/pages/Users";
 import ApiTest from "@/components/ApiTest";
 
@@ -133,6 +134,7 @@ function App() {
                         <Route path="/users" element={<RoleRoute allowed={["admin"]}><Users /></RoleRoute>} />
                         {/* Kế toán */}
                         <Route path="/accounting" element={<RoleRoute allowed={["admin", "accountant"]}><Accounting /></RoleRoute>} />
+                        <Route path="/accounting/expenses" element={<RoleRoute allowed={["admin", "accountant"]}><ExpenseVouchers /></RoleRoute>} />
                         
                         <Route path="*" element={<NotFound />} />
                       </Routes>

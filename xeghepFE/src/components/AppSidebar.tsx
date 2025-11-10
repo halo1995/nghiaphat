@@ -61,6 +61,7 @@ export function AppSidebar() {
           label: 'Kế Toán',
           items: [
             { title: 'Thu - Nộp', icon: Banknote, href: '/accounting' },
+            { title: 'Phiếu Chi', icon: Banknote, href: '/accounting/expenses' },
           ]
         },
       ];
@@ -94,6 +95,7 @@ export function AppSidebar() {
           { title: 'Khách Hàng', icon: Users, href: '/customers' },
           { title: 'Người Dùng', icon: Users, href: '/users' },
           { title: 'Kế Toán', icon: Banknote, href: '/accounting' },
+          { title: 'Phiếu Chi', icon: Banknote, href: '/accounting/expenses' },
         ]
       }
     ];

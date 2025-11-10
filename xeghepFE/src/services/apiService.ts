@@ -28,6 +28,11 @@ import {
   DriverExpenseAdvanceResponse,
   DriverExpenseAdvanceRequest,
   DriverExpenseAdvanceStatusUpdateRequest,
+  ExpenseVoucherResponse,
+  ExpenseVoucherRequestPayload,
+  ExpenseVoucherStatusUpdatePayload,
+  ExpenseVoucherHistoryResponse,
+  ExpenseSummaryResponse,
 } from './api';
 
 class ApiService {
@@ -454,6 +459,116 @@ class ApiService {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<AccountingSummaryResponse>(response);
+  }
+
+  // Expense voucher APIs
+  async getExpenseVouchers(options: {
+    status?: string;
+    category?: string;
+    from?: string;
+    to?: string;
+    createdBy?: number;
+    walletId?: number;
+    page?: number;
+    size?: number;
+  } = {}): Promise<ApiResponse<ExpenseVoucherResponse>> {
+    const params = new URLSearchParams({
+      page: String(options.page ?? 0),
+      size: String(options.size ?? 20),
+    });
+    if (options.status) params.append('status', options.status);
+    if (options.category) params.append('category', options.category);
+    if (options.from) params.append('from', options.from);
+    if (options.to) params.append('to', options.to);
+    if (options.createdBy != null) params.append('createdBy', options.createdBy.toString());
+    if (options.walletId != null) params.append('walletId', options.walletId.toString());
+
+    const response = await fetch(`${this.buildUrl('/expenses/vouchers')}?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<ExpenseVoucherResponse>>(response);
+  }
+
+  async getExpenseVoucher(id: number): Promise<ExpenseVoucherResponse> {
+    const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}`), {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ExpenseVoucherResponse>(response);
+  }
+
+  async createExpenseVoucher(
+    payload: ExpenseVoucherRequestPayload,
+    attachments: File[] = [],
+  ): Promise<ExpenseVoucherResponse> {
+    if (attachments.length > 0) {
+      const formData = this.buildMultipartPayload(payload, attachments);
+      const response = await fetch(this.buildUrl('/expenses/vouchers'), {
+        method: 'POST',
+        headers: this.getAuthHeaders('multipart'),
+        body: formData,
+      });
+      return this.handleResponse<ExpenseVoucherResponse>(response);
+    }
+
+    const response = await fetch(this.buildUrl('/expenses/vouchers'), {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<ExpenseVoucherResponse>(response);
+  }
+
+  async updateExpenseVoucher(
+    id: number,
+    payload: ExpenseVoucherRequestPayload,
+    attachments: File[] = [],
+  ): Promise<ExpenseVoucherResponse> {
+    if (attachments.length > 0) {
+      const formData = this.buildMultipartPayload(payload, attachments);
+      const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}`), {
+        method: 'PUT',
+        headers: this.getAuthHeaders('multipart'),
+        body: formData,
+      });
+      return this.handleResponse<ExpenseVoucherResponse>(response);
+    }
+
+    const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}`), {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<ExpenseVoucherResponse>(response);
+  }
+
+  async updateExpenseVoucherStatus(
+    id: number,
+    payload: ExpenseVoucherStatusUpdatePayload,
+  ): Promise<ExpenseVoucherResponse> {
+    const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}/status`), {
+      method: 'PATCH',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<ExpenseVoucherResponse>(response);
+  }
+
+  async getExpenseVoucherHistory(id: number): Promise<ExpenseVoucherHistoryResponse[]> {
+    const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}/history`), {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ExpenseVoucherHistoryResponse[]>(response);
+  }
+
+  async getExpenseSummary(from?: string, to?: string): Promise<ExpenseSummaryResponse> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const url = `${this.buildUrl('/expenses/summary')}${params.toString() ? `?${params}` : ''}`;
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ExpenseSummaryResponse>(response);
   }
 
   // Trip group APIs

@@ -13,6 +13,8 @@ import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateReques
 import com.brostech.transport.dto.payment.PaymentAttachmentDTO;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
+import com.brostech.transport.jpa.entity.CompanyTransaction;
+import com.brostech.transport.jpa.entity.CompanyWallet;
 import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.DepositRecord;
 import com.brostech.transport.jpa.entity.DriverExpenseAdvance;
@@ -20,6 +22,8 @@ import com.brostech.transport.jpa.entity.PaymentAttachment;
 import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripPayment;
 import com.brostech.transport.jpa.entity.User;
+import com.brostech.transport.jpa.repository.CompanyTransactionRepository;
+import com.brostech.transport.jpa.repository.CompanyWalletRepository;
 import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.jpa.repository.DepositRecordRepository;
 import com.brostech.transport.jpa.repository.DriverExpenseAdvanceRepository;
@@ -69,6 +73,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
     private final PaymentAttachmentService attachmentService;
+    private final CompanyWalletRepository companyWalletRepository;
+    private final CompanyTransactionRepository companyTransactionRepository;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -153,6 +159,11 @@ public class PaymentServiceImpl implements PaymentService {
         deposit = depositRecordRepository.save(deposit);
         adjustDriverOutstanding(driver, -req.getAmount());
         userRepository.save(driver);
+        creditCompanyWallet(req.getAmount(),
+                "Nộp tiền tài xế",
+                PaymentAttachment.ReferenceType.DEPOSIT_RECORD,
+                deposit.getId(),
+                driver.getId());
         attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, deposit.getId(),
                 attachments == null ? Collections.emptyList() : attachments);
         return toDepositRecordDTO(deposit);
@@ -334,25 +345,38 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driver advance status transition");
         }
 
+        User actionUser = resolveActionUser(req.getActionUserId());
+        enforceDriverAdvancePrivileges(actionUser, targetStatus);
+
         Date now = new Date();
         User driver = findDriverOrThrow(advance.getDriverId());
 
         switch (targetStatus) {
             case APPROVED -> {
                 advance.setApprovedAt(now);
-                advance.setApprovedBy(req.getActionUserId());
+                advance.setApprovedBy(actionUser.getId());
                 adjustDriverOutstanding(driver, -advance.getAmount());
                 userRepository.save(driver);
+                debitCompanyWallet(advance.getAmount(),
+                        "Duyệt tạm ứng tài xế",
+                        PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
+                        advance.getId(),
+                        actionUser.getId());
             }
             case DEDUCTED -> {
                 advance.setDeductedAt(now);
-                advance.setDeductedBy(req.getActionUserId());
+                advance.setDeductedBy(actionUser.getId());
             }
             case REJECTED -> {
                 advance.setRejectionReason(req.getRejectionReason());
                 if (advance.getStatus() == DriverExpenseAdvance.Status.APPROVED) {
                     adjustDriverOutstanding(driver, advance.getAmount());
                     userRepository.save(driver);
+                    creditCompanyWallet(advance.getAmount(),
+                            "Hoàn tạm ứng bị từ chối",
+                            PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
+                            advance.getId(),
+                            actionUser.getId());
                 }
             }
         }
@@ -472,6 +496,11 @@ public class PaymentServiceImpl implements PaymentService {
                         }
                         adjustDriverOutstanding(driver, -amount);
                         userRepository.save(driver);
+                        creditCompanyWallet(amount,
+                                "Đối soát tạm ứng khách",
+                                PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE,
+                                advance.getId(),
+                                advance.getCollectedBy());
                     });
         });
     }
@@ -709,5 +738,95 @@ public class PaymentServiceImpl implements PaymentService {
             updated = 0;
         }
         driver.setOutstandingBalance(updated);
+    }
+
+    private void creditCompanyWallet(double amount,
+                                     String description,
+                                     PaymentAttachment.ReferenceType referenceType,
+                                     Long referenceId,
+                                     Long actorId) {
+        if (amount <= 0) {
+            return;
+        }
+        CompanyWallet wallet = resolveDefaultWallet();
+        double currentBalance = Objects.requireNonNullElse(wallet.getBalance(), 0.0);
+        double newBalance = currentBalance + amount;
+        wallet.setBalance(newBalance);
+        companyWalletRepository.save(wallet);
+
+        CompanyTransaction transaction = CompanyTransaction.builder()
+                .walletId(wallet.getId())
+                .amount(amount)
+                .transactionType(CompanyTransaction.TransactionType.INCOME)
+                .referenceType(referenceType.name())
+                .referenceId(referenceId)
+                .description(description)
+                .createdBy(actorId)
+                .balanceAfter(newBalance)
+                .build();
+        companyTransactionRepository.save(transaction);
+    }
+
+    private void enforceDriverAdvancePrivileges(User actionUser, DriverExpenseAdvance.Status targetStatus) {
+        if (targetStatus == DriverExpenseAdvance.Status.APPROVED || targetStatus == DriverExpenseAdvance.Status.REJECTED) {
+            requireAdmin(actionUser);
+            return;
+        }
+        if (targetStatus == DriverExpenseAdvance.Status.DEDUCTED) {
+            requireAdminOrAccountant(actionUser);
+        }
+    }
+
+    private User resolveActionUser(Long actionUserId) {
+        if (actionUserId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "actionUserId is required");
+        }
+        return userRepository.findById(actionUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Action user not found"));
+    }
+
+    private void requireAdmin(User user) {
+        if (user.getRole() != User.UserRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ admin mới được duyệt phiếu tạm ứng");
+        }
+    }
+
+    private void requireAdminOrAccountant(User user) {
+        if (user.getRole() != User.UserRole.ADMIN && user.getRole() != User.UserRole.ACCOUNTANT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ admin hoặc kế toán được quyền hoàn tất khấu trừ");
+        }
+    }
+
+    private CompanyWallet resolveDefaultWallet() {
+        return companyWalletRepository.findAll().stream()
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chưa cấu hình ví công ty"));
+    }
+
+    private void debitCompanyWallet(double amount,
+                                    String description,
+                                    PaymentAttachment.ReferenceType referenceType,
+                                    Long referenceId,
+                                    Long actorId) {
+        if (amount <= 0) {
+            return;
+        }
+        CompanyWallet wallet = resolveDefaultWallet();
+        double currentBalance = Objects.requireNonNullElse(wallet.getBalance(), 0.0);
+        double newBalance = currentBalance - amount;
+        wallet.setBalance(newBalance);
+        companyWalletRepository.save(wallet);
+
+        CompanyTransaction transaction = CompanyTransaction.builder()
+                .walletId(wallet.getId())
+                .amount(amount)
+                .transactionType(CompanyTransaction.TransactionType.EXPENSE)
+                .referenceType(referenceType.name())
+                .referenceId(referenceId)
+                .description(description)
+                .createdBy(actorId)
+                .balanceAfter(newBalance)
+                .build();
+        companyTransactionRepository.save(transaction);
     }
 }
