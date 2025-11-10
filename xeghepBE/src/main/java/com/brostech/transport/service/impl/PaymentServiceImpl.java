@@ -478,6 +478,18 @@ public class PaymentServiceImpl implements PaymentService {
     }
     
     private void applyCustomerAdvanceReconciliationImpact(CustomerAdvancePayment advance, Long actorId) {
+        double amount = Objects.requireNonNullElse(advance.getAmount(), 0.0);
+        if (amount <= 0) {
+            return;
+        }
+
+        Long creditActor = actorId != null ? actorId : advance.getCollectedBy();
+        creditCompanyWallet(amount,
+                "Đối soát tạm ứng khách",
+                PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE,
+                advance.getId(),
+                creditActor);
+
         if (advance.getTripId() == null) {
             return;
         }
@@ -490,17 +502,8 @@ public class PaymentServiceImpl implements PaymentService {
 
             userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                     .ifPresent(driver -> {
-                        double amount = Objects.requireNonNullElse(advance.getAmount(), 0.0);
-                        if (amount <= 0) {
-                            return;
-                        }
                         adjustDriverOutstanding(driver, -amount);
                         userRepository.save(driver);
-                        creditCompanyWallet(amount,
-                                "Đối soát tạm ứng khách",
-                                PaymentAttachment.ReferenceType.CUSTOMER_ADVANCE,
-                                advance.getId(),
-                                actorId);
                     });
         });
     }
