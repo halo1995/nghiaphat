@@ -803,7 +803,7 @@ public class PaymentServiceImpl implements PaymentService {
     private CompanyWallet resolveDefaultWallet() {
         return companyWalletRepository.findAll().stream()
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chưa cấu hình ví công ty"));
+                .orElseGet(this::createDefaultWallet);
     }
 
     private void debitCompanyWallet(double amount,
@@ -831,5 +831,15 @@ public class PaymentServiceImpl implements PaymentService {
                 .balanceAfter(newBalance)
                 .build();
         companyTransactionRepository.save(transaction);
+    }
+
+    private CompanyWallet createDefaultWallet() {
+        CompanyWallet wallet = CompanyWallet.builder()
+                .name("Quy chính")
+                .balance(0.0)
+                .currency("VND")
+                .description("Ví tiền mặt mặc định")
+                .build();
+        return companyWalletRepository.save(wallet);
     }
 }
