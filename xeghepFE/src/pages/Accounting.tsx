@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getRevenueSummary,
@@ -31,6 +31,7 @@ import type {
   DriverExpenseAdvance,
   DriverExpenseStatus,
   DriverExpenseType,
+  PaymentAttachment,
 } from '@/data/accounting';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
@@ -350,6 +351,39 @@ const Accounting: React.FC = () => {
     driverAdvanceStatusMut.mutate({ id, status, actionUserId: user.id.toString(), note, rejectionReason });
   };
 
+  const openAttachment = useCallback(async (attachment: PaymentAttachment) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(attachment.downloadUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        throw new Error('Không thể tải file');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const opened = window.open(objectUrl, '_blank');
+      if (!opened) {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = attachment.fileName || 'attachment';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      toast({
+        title: 'Lỗi tải file',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    }
+  }, [toast]);
+
   const customerAdvances = customerAdvancesQ.data ?? [];
   const driverAdvances = driverAdvancesQ.data ?? [];
 
@@ -542,13 +576,9 @@ const Accounting: React.FC = () => {
 
   const previewAttachments = previewAdvance?.attachments ?? [];
   const driverPreviewAttachments = driverAdvancePreview?.attachments ?? [];
-  const activeCustomerAttachmentUrl = customerAttachmentPreviewUrls[previewImageIndex]
-    || previewAttachments[previewImageIndex]?.downloadUrl
-    || '';
+  const activeCustomerAttachmentUrl = customerAttachmentPreviewUrls[previewImageIndex] ?? '';
   const activeCustomerAttachment = previewAttachments[previewImageIndex];
-  const activeDriverAttachmentUrl = driverAttachmentPreviewUrls[driverAdvanceImageIndex]
-    || driverPreviewAttachments[driverAdvanceImageIndex]?.downloadUrl
-    || '';
+  const activeDriverAttachmentUrl = driverAttachmentPreviewUrls[driverAdvanceImageIndex] ?? '';
   const activeDriverAttachment = driverPreviewAttachments[driverAdvanceImageIndex];
   const isApprovalMode = previewAction !== null;
 
@@ -1175,10 +1205,13 @@ const Accounting: React.FC = () => {
                       {payment.attachments.length > 0 ? (
                         <div className="flex flex-col gap-1">
                           {payment.attachments.map((attachment) => (
-                            <Button key={attachment.id} variant="link" size="sm" asChild>
-                              <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                {attachment.fileName}
-                              </a>
+                            <Button
+                              key={attachment.id}
+                              variant="link"
+                              size="sm"
+                              onClick={() => openAttachment(attachment)}
+                            >
+                              {attachment.fileName}
                             </Button>
                           ))}
                         </div>
@@ -1222,10 +1255,13 @@ const Accounting: React.FC = () => {
                       {deposit.attachments.length > 0 ? (
                         <div className="flex flex-col gap-1">
                           {deposit.attachments.map((attachment) => (
-                            <Button key={attachment.id} variant="link" size="sm" asChild>
-                              <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                {attachment.fileName}
-                              </a>
+                            <Button
+                              key={attachment.id}
+                              variant="link"
+                              size="sm"
+                              onClick={() => openAttachment(attachment)}
+                            >
+                              {attachment.fileName}
                             </Button>
                           ))}
                         </div>
@@ -1296,7 +1332,7 @@ const Accounting: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {previewAttachments.map((attachment, index) => {
-                        const previewUrl = customerAttachmentPreviewUrls[index] || attachment.downloadUrl;
+                        const previewUrl = customerAttachmentPreviewUrls[index] ?? '';
                         const isActive = index === previewImageIndex;
                         return (
                           <button
@@ -1322,6 +1358,17 @@ const Accounting: React.FC = () => {
                         );
                       })}
                     </div>
+                    {activeCustomerAttachment && (
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openAttachment(activeCustomerAttachment)}
+                        >
+                          Mở file gốc
+                        </Button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
@@ -1431,7 +1478,7 @@ const Accounting: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {driverPreviewAttachments.map((attachment, index) => {
-                            const previewUrl = driverAttachmentPreviewUrls[index] || attachment.downloadUrl;
+                            const previewUrl = driverAttachmentPreviewUrls[index] ?? '';
                             const isActive = index === driverAdvanceImageIndex;
                             return (
                               <button
@@ -1457,6 +1504,17 @@ const Accounting: React.FC = () => {
                             );
                           })}
                         </div>
+                        {activeDriverAttachment && (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAttachment(activeDriverAttachment)}
+                            >
+                              Mở file gốc
+                            </Button>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
