@@ -355,8 +355,7 @@ public class PaymentServiceImpl implements PaymentService {
             case APPROVED -> {
                 advance.setApprovedAt(now);
                 advance.setApprovedBy(actionUser.getId());
-                adjustDriverOutstanding(driver, -advance.getAmount());
-                userRepository.save(driver);
+                // Không điều chỉnh công nợ tài xế ở đây, chỉ hạch toán ví công ty
                 debitCompanyWallet(advance.getAmount(),
                         "Duyệt tạm ứng tài xế",
                         PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
@@ -370,8 +369,7 @@ public class PaymentServiceImpl implements PaymentService {
             case REJECTED -> {
                 advance.setRejectionReason(req.getRejectionReason());
                 if (advance.getStatus() == DriverExpenseAdvance.Status.APPROVED) {
-                    adjustDriverOutstanding(driver, advance.getAmount());
-                    userRepository.save(driver);
+                    // Không đảo lại công nợ tài xế, chỉ hoàn lại vào ví công ty
                     creditCompanyWallet(advance.getAmount(),
                             "Hoàn tạm ứng bị từ chối",
                             PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,

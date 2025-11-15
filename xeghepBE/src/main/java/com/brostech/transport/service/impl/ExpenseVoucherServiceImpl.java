@@ -352,13 +352,26 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không tìm thấy ví công ty"));
 
         double currentBalance = Objects.requireNonNullElse(wallet.getBalance(), 0.0);
-        double newBalance = currentBalance - voucher.getAmount();
-        wallet.setBalance(newBalance);
-        walletRepository.save(wallet);
+
+        // Với phiếu chi tạm ứng tài xế đã hạch toán ví khi duyệt tạm ứng (PaymentService),
+        // không trừ thêm vào ví lần nữa để tránh ghi nhận trùng.
+        boolean isDriverAdvanceVoucher =
+                voucher.getCategory() == ExpenseVoucher.Category.DRIVER_ADVANCE
+                        && voucher.getDriverExpenseAdvanceId() != null;
+
+        double newBalance = currentBalance;
+        double transactionAmount = 0.0;
+
+        if (!isDriverAdvanceVoucher) {
+            newBalance = currentBalance - voucher.getAmount();
+            transactionAmount = voucher.getAmount();
+            wallet.setBalance(newBalance);
+            walletRepository.save(wallet);
+        }
 
         CompanyTransaction transaction = CompanyTransaction.builder()
                 .walletId(wallet.getId())
-                .amount(voucher.getAmount())
+                .amount(transactionAmount)
                 .transactionType(CompanyTransaction.TransactionType.EXPENSE)
                 .referenceType(PaymentAttachment.ReferenceType.EXPENSE_VOUCHER.name())
                 .referenceId(voucher.getId())

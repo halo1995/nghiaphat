@@ -35,16 +35,26 @@ import type {
 } from '@/data/accounting';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 
+const getCurrentMonthRange = () => {
+  const now = new Date();
+  const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const toDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const format = (date: Date) => date.toISOString().slice(0, 10);
+  return { from: format(fromDate), to: format(toDate) };
+};
+
 const Accounting: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
 
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const currentMonthRange = useMemo(() => getCurrentMonthRange(), []);
+
+  const [dateFrom, setDateFrom] = useState<string>(() => currentMonthRange.from);
+  const [dateTo, setDateTo] = useState<string>(() => currentMonthRange.to);
   const [selectedDriverFilter, setSelectedDriverFilter] = useState<string>('');
-  const [customerStatusFilter, setCustomerStatusFilter] = useState<'all' | CustomerAdvanceStatus>('pending');
-  const [driverStatusFilter, setDriverStatusFilter] = useState<'all' | DriverExpenseStatus>('requested');
+  const [customerStatusFilter, setCustomerStatusFilter] = useState<'all' | CustomerAdvanceStatus>('all');
+  const [driverStatusFilter, setDriverStatusFilter] = useState<'all' | DriverExpenseStatus>('all');
   const [depositValues, setDepositValues] = useState<Record<string, string>>({});
   const [paymentForm, setPaymentForm] = useState({
     tripId: '',
@@ -639,11 +649,11 @@ const Accounting: React.FC = () => {
           <Button
             variant="outline"
             onClick={() => {
-              setDateFrom('');
-              setDateTo('');
+              setDateFrom(currentMonthRange.from);
+              setDateTo(currentMonthRange.to);
               setSelectedDriverFilter('');
-              setCustomerStatusFilter('pending');
-              setDriverStatusFilter('requested');
+              setCustomerStatusFilter('all');
+              setDriverStatusFilter('all');
             }}
           >
             Xóa lọc
@@ -949,117 +959,7 @@ const Accounting: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Tạm ứng phí tài xế</CardTitle>
-            <p className="text-sm text-muted-foreground">Theo dõi và duyệt các khoản ứng phí cho tài xế</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Select
-              value={driverStatusFilter}
-              onValueChange={(value) => setDriverStatusFilter(value as 'all' | DriverExpenseStatus)}
-            >
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="requested">{driverStatusLabels.requested}</SelectItem>
-                <SelectItem value="approved">{driverStatusLabels.approved}</SelectItem>
-                <SelectItem value="deducted">{driverStatusLabels.deducted}</SelectItem>
-                <SelectItem value="rejected">{driverStatusLabels.rejected}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {driverAdvancesQ.isLoading ? (
-            <div className="py-6 text-center text-muted-foreground">Đang tải dữ liệu...</div>
-          ) : driverAdvances.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground">Chưa có tạm ứng nào với bộ lọc hiện tại</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Thời gian</TableHead>
-                  <TableHead>Tài xế</TableHead>
-                  <TableHead>Loại phí</TableHead>
-                  <TableHead className="text-right">Số tiền</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead className="text-right">Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {driverAdvances.map((advance) => {
-                  const driver = driversQ.data?.find((d) => d.id === advance.driverId);
-                  const actions: Array<{ label: string; status: DriverExpenseStatus; variant?: 'outline' | 'default' | 'secondary' | 'destructive' }> = [];
-                  if (advance.status === 'requested') {
-                    actions.push({ label: 'Duyệt', status: 'approved', variant: 'secondary' });
-                    actions.push({ label: 'Từ chối', status: 'rejected', variant: 'destructive' });
-                  } else if (advance.status === 'approved') {
-                    actions.push({ label: 'Đã khấu trừ', status: 'deducted', variant: 'default' });
-                    actions.push({ label: 'Từ chối', status: 'rejected', variant: 'destructive' });
-                  }
-                  return (
-                    <TableRow key={advance.id}>
-                      <TableCell>{formatDateTime(advance.requestedAt)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900">{driver?.name || `#${advance.driverId}`}</span>
-                          {advance.tripId && (
-                            <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
-                          )}
-                          {advance.requestedBy && (
-                            <span className="text-xs text-muted-foreground">Tổng đài viên #{advance.requestedBy}</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{driverExpenseLabels[advance.expenseType]}</TableCell>
-                      <TableCell className="text-right font-medium">{advance.amount.toLocaleString('vi-VN')} ₫</TableCell>
-                      <TableCell>
-                        <Badge variant={driverStatusVariants[advance.status]}>{driverStatusLabels[advance.status]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          {actions.map((action) => (
-                            <Button
-                              key={action.label}
-                              size="sm"
-                              variant={action.variant ?? 'outline'}
-                              disabled={driverAdvanceStatusMut.isPending}
-                              onClick={() => handleDriverAdvanceStatus(advance.id, action.status)}
-                            >
-                              {action.label}
-                            </Button>
-                          ))}
-                        </div>
-                        {advance.note && (
-                          <p className="mt-2 text-xs text-muted-foreground">{advance.note}</p>
-                        )}
-                        {advance.rejectionReason && (
-                          <p className="mt-1 text-xs text-destructive">Lý do: {advance.rejectionReason}</p>
-                        )}
-                        {advance.attachments.length > 0 && (
-                          <div className="mt-2 flex flex-col gap-1 items-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => showDriverAdvanceAttachments(advance)}
-                            >
-                              Xem chứng từ ({advance.attachments.length})
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* ĐÃ BỎ phần danh sách tạm ứng phí tài xế khỏi trang Accounting, chỉ giữ lại KPI tổng quan ở phía trên */}
 
       <Card>
         <CardHeader>
@@ -1279,11 +1179,10 @@ const Accounting: React.FC = () => {
       </Card>
 
       <Dialog
-        open={!!previewAdvance || !!driverAdvancePreview}
+        open={!!previewAdvance}
         onOpenChange={(open) => {
-          if (!open && !customerAdvanceStatusMut.isPending && !driverAdvanceStatusMut.isPending) {
+          if (!open && !customerAdvanceStatusMut.isPending) {
             closeAdvancePreview();
-            setDriverAdvancePreview(null);
             setActivePreviewTab('customer');
           }
         }}
@@ -1296,26 +1195,17 @@ const Accounting: React.FC = () => {
             value={activePreviewTab}
             defaultValue="customer"
             onValueChange={(value) => {
-              if (value === 'customer') {
-                if (previewAdvance) {
-                  setActivePreviewTab('customer');
-                }
-                return;
-              }
-              if (value === 'driver') {
-                if (driverAdvancePreview) {
-                  setActivePreviewTab('driver');
-                }
+              if (value === 'customer' && previewAdvance) {
+                setActivePreviewTab('customer');
               }
             }}
           >
             <TabsList>
               <TabsTrigger value="customer" disabled={!previewAdvance}>Ứng trước khách</TabsTrigger>
-              <TabsTrigger value="driver" disabled={!driverAdvancePreview}>Tạm ứng tài xế</TabsTrigger>
             </TabsList>
             <TabsContent value="customer">
-          {previewAdvance && (
-            <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
+              {previewAdvance && (
+                <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
               <div className="space-y-4">
                 {previewAttachments.length > 0 ? (
                   <>
@@ -1435,150 +1325,28 @@ const Accounting: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={closeAdvancePreview}
-              disabled={customerAdvanceStatusMut.isPending}
-            >
-              Đóng
-            </Button>
-            {isApprovalMode && (
-              <Button
-                onClick={submitAdvanceApproval}
-                disabled={customerAdvanceStatusMut.isPending}
-              >
-                {previewAction === 'rejected'
-                  ? 'Xác nhận từ chối'
-                  : previewAction === 'reconciled'
-                    ? 'Xác nhận đã đối soát'
-                    : 'Chuyển kế toán'}
-              </Button>
-            )}
-          </DialogFooter>
-            </TabsContent>
-            <TabsContent value="driver">
-              {driverAdvancePreview ? (
-                <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
-                  <div className="space-y-4">
-                    {driverPreviewAttachments.length > 0 ? (
-                      <>
-                        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
-                          {activeDriverAttachmentUrl ? (
-                            <img
-                              src={activeDriverAttachmentUrl}
-                              alt={activeDriverAttachment?.fileName ?? 'attachment'}
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <span className="text-sm text-muted-foreground">Không thể tải ảnh</span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {driverPreviewAttachments.map((attachment, index) => {
-                            const previewUrl = driverAttachmentPreviewUrls[index] ?? '';
-                            const isActive = index === driverAdvanceImageIndex;
-                            return (
-                              <button
-                                key={attachment.id}
-                                type="button"
-                                onClick={() => setDriverAdvanceImageIndex(index)}
-                                className={`h-16 w-16 overflow-hidden rounded border ${
-                                  isActive ? 'ring-2 ring-primary ring-offset-2' : 'opacity-80 hover:opacity-100'
-                                }`}
-                              >
-                                {previewUrl ? (
-                                  <img
-                                    src={previewUrl}
-                                    alt={attachment.fileName}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="flex h-full w-full items-center justify-center px-1 text-[10px] text-muted-foreground">
-                                    Xem ảnh
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {activeDriverAttachment && (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openAttachment(activeDriverAttachment)}
-                            >
-                              Mở file gốc
-                            </Button>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-                        Không có chứng từ đính kèm
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <p className="text-xs uppercase text-muted-foreground">Tài xế</p>
-                      <p className="font-medium text-gray-900">#{driverAdvancePreview.driverId}</p>
-                      {driverAdvancePreview.tripId && (
-                        <p className="text-muted-foreground">Chuyến #{driverAdvancePreview.tripId}</p>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 gap-2">
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Số tiền</p>
-                        <p className="font-semibold text-gray-900">{driverAdvancePreview.amount.toLocaleString('vi-VN')} ₫</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Loại phí</p>
-                        <p className="font-medium">{driverExpenseLabels[driverAdvancePreview.expenseType]}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Trạng thái hiện tại</p>
-                        <Badge variant={driverStatusVariants[driverAdvancePreview.status]}>
-                          {driverStatusLabels[driverAdvancePreview.status]}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Ngày yêu cầu</p>
-                        <p>{formatDateTime(driverAdvancePreview.requestedAt)}</p>
-                      </div>
-                    </div>
-                    {driverAdvancePreview.note && (
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Ghi chú</p>
-                        <p>{driverAdvancePreview.note}</p>
-                      </div>
-                    )}
-                    {driverAdvancePreview.rejectionReason && (
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">Lý do từ chối</p>
-                        <p className="text-destructive">{driverAdvancePreview.rejectionReason}</p>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              ) : (
-                <div className="py-6 text-center text-muted-foreground">Không có dữ liệu</div>
               )}
-              <DialogFooter>
+              <DialogFooter className="gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setDriverAdvancePreview(null);
-                    setActivePreviewTab('customer');
-                    setDriverAdvanceImageIndex(0);
-                  }}
-                  disabled={driverAdvanceStatusMut.isPending}
+                  onClick={closeAdvancePreview}
+                  disabled={customerAdvanceStatusMut.isPending}
                 >
                   Đóng
                 </Button>
+                {isApprovalMode && (
+                  <Button
+                    onClick={submitAdvanceApproval}
+                    disabled={customerAdvanceStatusMut.isPending}
+                  >
+                    {previewAction === 'rejected'
+                      ? 'Xác nhận từ chối'
+                      : previewAction === 'reconciled'
+                        ? 'Xác nhận đã đối soát'
+                        : 'Chuyển kế toán'}
+                  </Button>
+                )}
               </DialogFooter>
             </TabsContent>
           </Tabs>
@@ -1589,3 +1357,4 @@ const Accounting: React.FC = () => {
 };
 
 export default Accounting;
+

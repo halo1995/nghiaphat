@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
+import { Plus } from 'lucide-react';
 import {
   ExpenseVoucher,
   ExpenseVoucherList,
@@ -31,6 +32,14 @@ import {
   UpdateExpenseVoucherInput,
   UpdateExpenseVoucherStatusInput,
 } from '@/data/expenseVouchers';
+import { getDrivers } from '@/data/drivers';
+import {
+  getDriverExpenseAdvances,
+  updateDriverExpenseAdvanceStatus,
+  type DriverExpenseStatus,
+  type DriverExpenseType,
+  type DriverExpenseAdvance,
+} from '@/data/accounting';
 
 const statusLabels: Record<ExpenseVoucherStatus, string> = {
   DRAFT: 'Nháp',
@@ -54,6 +63,27 @@ const categoryLabels: Record<ExpenseVoucherCategory, string> = {
   DRIVER_ADVANCE: 'Tạm ứng tài xế',
   OPERATIONS: 'Chi phí vận hành',
   OTHER: 'Khác',
+};
+
+const driverStatusLabels: Record<DriverExpenseStatus, string> = {
+  requested: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  deducted: 'Đã khấu trừ',
+  rejected: 'Từ chối',
+};
+
+const driverStatusVariants: Record<DriverExpenseStatus, 'outline' | 'default' | 'secondary' | 'destructive'> = {
+  requested: 'outline',
+  approved: 'secondary',
+  deducted: 'default',
+  rejected: 'destructive',
+};
+
+const driverExpenseLabels: Record<DriverExpenseType, string> = {
+  toll: 'Phí cầu đường',
+  parking: 'Phí bến bãi',
+  fuel: 'Nhiên liệu',
+  other: 'Khác',
 };
 
 interface VoucherFormState {
@@ -83,12 +113,28 @@ const defaultFormState: VoucherFormState = {
   submitImmediately: true,
 };
 
+const getCurrentMonthRange = () => {
+  const now = new Date();
+  const fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const toDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const format = (date: Date) => date.toISOString().slice(0, 10);
+  return { from: format(fromDate), to: format(toDate) };
+};
+
 const ExpenseVouchersPage: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const [filters, setFilters] = useState<ExpenseVoucherQuery>({ status: 'PENDING', size: 20, page: 0 });
+  const currentMonthRange = useMemo(() => getCurrentMonthRange(), []);
+
+  const [filters, setFilters] = useState<ExpenseVoucherQuery>(() => ({
+    status: undefined,
+    size: 20,
+    page: 0,
+    from: currentMonthRange.from,
+    to: currentMonthRange.to,
+  }));
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formState, setFormState] = useState<VoucherFormState>(defaultFormState);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -97,9 +143,21 @@ const ExpenseVouchersPage: React.FC = () => {
   const [historyVoucherId, setHistoryVoucherId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const [currentVoucher, setCurrentVoucher] = useState<ExpenseVoucher | null>(null);
+  const [selectedDriverFilter, setSelectedDriverFilter] = useState<string>('');
+  const [driverStatusFilter, setDriverStatusFilter] = useState<'all' | DriverExpenseStatus>('all');
+  const [driverAdvancePreview, setDriverAdvancePreview] = useState<DriverExpenseAdvance | null>(null);
+  const [driverAdvanceAttachmentUrls, setDriverAdvanceAttachmentUrls] = useState<string[]>([]);
+  const driverAdvanceAttachmentUrlsRef = useRef<string[]>([]);
+  const [depositImages, setDepositImages] = useState<File[]>([]);
+  const depositFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [depositImagesLoading, setDepositImagesLoading] = useState(false);
+  const [approvalNote, setApprovalNote] = useState('');
+  const [isDriverExpenseTab, setIsDriverExpenseTab] = useState(false);
+  const [driverAdvanceImageIndex, setDriverAdvanceImageIndex] = useState(0);
 
   const isAdmin = user?.role === 'ADMIN';
   const isAccountant = user?.role === 'ACCOUNTANT';
+  const isAuthenticated = !!user;
 
   const vouchersQuery = useQuery<ExpenseVoucherList, Error>({
     queryKey: ['expense-vouchers', filters],
@@ -116,6 +174,22 @@ const ExpenseVouchersPage: React.FC = () => {
     queryKey: ['expense-voucher-history', historyVoucherId],
     queryFn: () => (historyVoucherId ? getExpenseVoucherHistory(historyVoucherId) : Promise.resolve([])),
     enabled: historyVoucherId != null,
+  });
+
+  const driversQuery = useQuery({
+    queryKey: ['drivers'],
+    queryFn: getDrivers,
+    enabled: isAuthenticated && (isAccountant || isAdmin),
+  });
+
+  const driverAdvancesQuery = useQuery({
+    queryKey: ['driver-advances', driverStatusFilter, selectedDriverFilter],
+    queryFn: () =>
+      getDriverExpenseAdvances({
+        status: driverStatusFilter === 'all' ? undefined : driverStatusFilter,
+        driverId: selectedDriverFilter || undefined,
+      }),
+    enabled: isAuthenticated && (isAccountant || isAdmin),
   });
 
   const resetForm = useCallback(() => {
@@ -236,6 +310,42 @@ const ExpenseVouchersPage: React.FC = () => {
     },
   });
 
+  const driverAdvanceStatusMut = useMutation({
+    mutationFn: updateDriverExpenseAdvanceStatus,
+    onSuccess: () => {
+      toast({
+        title: 'Đã cập nhật',
+        description: 'Trạng thái phiếu ứng phí đã được cập nhật',
+      });
+      qc.invalidateQueries({ queryKey: ['driver-advances'] });
+      setDriverAdvancePreview(null);
+      setApprovalNote('');
+      setDepositImages([]);
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: 'Lỗi',
+        description: (e instanceof Error ? e.message : String(e)) || 'Không thể cập nhật trạng thái',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const autoCreateDriverAdvanceVoucherMut = useMutation<ExpenseVoucher, Error, CreateExpenseVoucherInput>({
+    mutationFn: createExpenseVoucher,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expense-vouchers'] });
+      qc.invalidateQueries({ queryKey: ['expense-voucher-summary'] });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Không thể tạo phiếu chi cho tạm ứng tài xế',
+        description: error instanceof Error ? error.message : 'Vui lòng kiểm tra lại trong tab Phiếu chi',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const updateMutation = useMutation<ExpenseVoucher, Error, UpdateExpenseVoucherInput>({
     mutationFn: updateExpenseVoucher,
     onSuccess: () => {
@@ -347,6 +457,141 @@ const ExpenseVouchersPage: React.FC = () => {
   const isSubmitting = createMutation.isPending || updateMutation.isPending || statusMutation.isPending;
   const canEditForm = !currentVoucher || currentVoucher.status === 'DRAFT' || currentVoucher.status === 'PENDING';
 
+  useEffect(() => {
+    const revokeAll = () => {
+      driverAdvanceAttachmentUrlsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      driverAdvanceAttachmentUrlsRef.current = [];
+    };
+
+    revokeAll();
+    setDriverAdvanceAttachmentUrls([]);
+
+    if (!driverAdvancePreview || driverAdvancePreview.attachments.length === 0) {
+      return () => {
+        revokeAll();
+      };
+    }
+
+    let cancelled = false;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    const loadPreviews = async () => {
+      const urls: string[] = [];
+      for (const attachment of driverAdvancePreview.attachments) {
+        try {
+          const response = await fetch(attachment.downloadUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (!response.ok) {
+            throw new Error('Failed to load attachment');
+          }
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          urls.push(objectUrl);
+        } catch (error) {
+          urls.push('');
+        }
+      }
+      if (cancelled) {
+        urls.forEach((url) => url && URL.revokeObjectURL(url));
+        return;
+      }
+      driverAdvanceAttachmentUrlsRef.current = urls.filter((url) => !!url);
+      setDriverAdvanceAttachmentUrls(urls);
+    };
+
+    loadPreviews();
+
+    return () => {
+      cancelled = true;
+      revokeAll();
+    };
+  }, [driverAdvancePreview]);
+
+  const handleApproveAdvance = (status: DriverExpenseStatus) => {
+    if (!driverAdvancePreview || !user?.id) {
+      toast({ title: 'Thiếu quyền', description: 'Vui lòng đăng nhập lại', variant: 'destructive' });
+      return;
+    }
+
+    const trimmedNote = approvalNote.trim();
+    const payload: {
+      id: string;
+      status: DriverExpenseStatus;
+      actionUserId: string;
+      note?: string;
+      rejectionReason?: string;
+    } = {
+      id: driverAdvancePreview.id,
+      status,
+      actionUserId: user.id.toString(),
+    };
+
+    if (trimmedNote) {
+      payload.note = trimmedNote;
+    }
+    if (status === 'rejected' && trimmedNote) {
+      payload.rejectionReason = trimmedNote;
+    }
+
+    // Cập nhật trạng thái tạm ứng phí tài xế
+    driverAdvanceStatusMut.mutate(payload, {
+      onSuccess: (updatedAdvance) => {
+        // Nếu duyệt phiếu (approved) thì tự tạo 1 phiếu chi loại DRIVER_ADVANCE
+        if (status === 'approved' && updatedAdvance) {
+          const driver = driversQuery.data?.find((d) => d.id === updatedAdvance.driverId);
+          const driverName = driver?.name || updatedAdvance.driverId;
+
+          autoCreateDriverAdvanceVoucherMut.mutate({
+            title: `Tạm ứng phí tài xế ${driverName}`,
+            category: 'DRIVER_ADVANCE',
+            amount: updatedAdvance.amount,
+            payeeName: driverName,
+            payeeAccount: null,
+            description: updatedAdvance.tripId
+              ? `Tạm ứng phí cho chuyến #${updatedAdvance.tripId}`
+              : 'Tạm ứng phí tài xế',
+            note: trimmedNote || null,
+            actorId: user.id.toString(),
+            walletId: null,
+            driverExpenseAdvanceId: updatedAdvance.id,
+            submitImmediately: true,
+            attachments: [],
+          });
+        }
+      },
+    });
+  };
+
+  const handleDepositImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setDepositImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setDepositImages(compressed);
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setDepositImagesLoading(false);
+    }
+  };
+
   const renderHistory = () => {
     if (!historyVoucherId) {
       return <div className="py-4 text-sm text-muted-foreground">Chọn phiếu chi để xem lịch sử</div>;
@@ -383,242 +628,397 @@ const ExpenseVouchersPage: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Quản lý phiếu chi</h2>
+          <h2 className="text-2xl font-semibold text-gray-900">Quản lý chi phí</h2>
           <p className="text-sm text-muted-foreground">Tạo, duyệt và theo dõi các khoản chi của công ty</p>
         </div>
-        {(isAccountant || isAdmin) && (
-          <div className="flex gap-2">
-            <Button onClick={handleOpenCreate}>Tạo phiếu chi</Button>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tổng đã duyệt</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <div className="text-3xl font-bold text-green-600">
-              {summaryQuery.data ? formatCurrency(summaryQuery.data.totalApproved) : '...'}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {summaryQuery.data ? `${summaryQuery.data.approvedCount} phiếu` : '---'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Đang chờ duyệt</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <div className="text-3xl font-bold text-amber-600">
-              {summaryQuery.data ? formatCurrency(summaryQuery.data.totalPending) : '...'}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {summaryQuery.data ? `${summaryQuery.data.pendingCount} phiếu` : '---'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Đã từ chối</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            <div className="text-3xl font-bold text-red-600">
-              {summaryQuery.data ? formatCurrency(summaryQuery.data.totalRejected) : '...'}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {summaryQuery.data ? `${summaryQuery.data.rejectedCount} phiếu` : '---'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Số dư ví công ty</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              {summaryQuery.data ? formatCurrency(summaryQuery.data.walletBalance) : '...'}
-            </div>
-            <p className="text-xs text-muted-foreground">Tổng các ví đang theo dõi</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Danh sách phiếu chi</CardTitle>
-            <p className="text-sm text-muted-foreground">Lọc theo trạng thái, danh mục và thời gian</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Select value={statusFilterValue as string} onValueChange={(value) => applyFilters({ status: value === 'ALL' ? undefined : (value as ExpenseVoucherStatus) })}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="DRAFT">{statusLabels.DRAFT}</SelectItem>
-                <SelectItem value="PENDING">{statusLabels.PENDING}</SelectItem>
-                <SelectItem value="APPROVED">{statusLabels.APPROVED}</SelectItem>
-                <SelectItem value="REJECTED">{statusLabels.REJECTED}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={categoryFilterValue as string} onValueChange={(value) => applyFilters({ category: value === 'ALL' ? undefined : (value as ExpenseVoucherCategory) })}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Danh mục" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả danh mục</SelectItem>
-                {(Object.keys(categoryLabels) as ExpenseVoucherCategory[]).map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {categoryLabels[category]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <DatePickerField
-              value={filters.from ?? ''}
-              onChange={(value) => applyFilters({ from: value || undefined })}
-              placeholder="Từ ngày"
-              allowClear
-            />
-            <DatePickerField
-              value={filters.to ?? ''}
-              onChange={(value) => applyFilters({ to: value || undefined })}
-              placeholder="Đến ngày"
-              allowClear
-            />
-            <Button variant="outline" onClick={() => applyFilters({ status: undefined, category: undefined, from: undefined, to: undefined })}>
-              Xóa lọc
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {vouchersQuery.isLoading ? (
-            <div className="py-6 text-center text-muted-foreground">Đang tải dữ liệu...</div>
-          ) : vouchers.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground">Chưa có phiếu chi nào với bộ lọc hiện tại</div>
-          ) : (
-            <div className="space-y-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mã phiếu</TableHead>
-                    <TableHead>Tiêu đề</TableHead>
-                    <TableHead>Danh mục</TableHead>
-                    <TableHead className="text-right">Số tiền</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>Người tạo</TableHead>
-                    <TableHead>Ngày tạo</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {vouchers.map((voucher) => (
-                    <TableRow key={voucher.id}>
-                      <TableCell className="font-medium">{voucher.code || `#${voucher.id}`}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span>{voucher.title}</span>
-                          {voucher.note && <span className="text-xs text-muted-foreground">{voucher.note}</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{categoryLabels[voucher.category]}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-gray-900">
-                        {formatCurrency(voucher.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariants[voucher.status]}>{statusLabels[voucher.status]}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span>{voucher.createdByName || voucher.createdBy}</span>
-                          <span className="text-xs text-muted-foreground">{voucher.payeeName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatDateTime(voucher.createdAt)}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openHistoryDialog(voucher)}>
-                            Chi tiết
-                          </Button>
-                          {voucher.attachments.length > 0 && (
-                            <Button size="sm" variant="ghost" onClick={() => openAttachment(voucher.attachments[0])}>
-                              Xem file
-                            </Button>
-                          )}
-                          {voucher.status === 'DRAFT' && isAccountant && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleStatusChange(voucher, 'PENDING')}
-                              disabled={statusMutation.isPending}
-                            >
-                              Gửi duyệt
-                            </Button>
-                          )}
-                          {voucher.status === 'PENDING' && isAdmin && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleStatusChange(voucher, 'APPROVED')}
-                                disabled={statusMutation.isPending}
-                              >
-                                Duyệt
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleStatusChange(voucher, 'REJECTED')}
-                                disabled={statusMutation.isPending}
-                              >
-                                Từ chối
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  Trang {((filters.page ?? 0) + 1)} / {Math.max(1, Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)))}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={(filters.page ?? 0) === 0}
-                    onClick={() => applyFilters({ page: Math.max(0, (filters.page ?? 0) - 1) })}
-                  >
-                    Trước
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={(filters.page ?? 0) >= Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)) - 1}
-                    onClick={() => applyFilters({ page: (filters.page ?? 0) + 1 })}
-                  >
-                    Sau
-                  </Button>
-                </div>
-              </div>
+        <div className="flex items-center gap-4">
+          <Tabs
+            value={isDriverExpenseTab ? 'driver' : 'voucher'}
+            onValueChange={(value) => setIsDriverExpenseTab(value === 'driver')}
+          >
+            <TabsList>
+              <TabsTrigger value="voucher">Phiếu chi</TabsTrigger>
+              <TabsTrigger value="driver">Chi phí tài xế</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {(isAccountant || isAdmin) && !isDriverExpenseTab && (
+            <div className="flex gap-2">
+              <Button onClick={handleOpenCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Tạo phiếu chi
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {!isDriverExpenseTab && (
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tổng đã duyệt</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="text-3xl font-bold text-green-600">
+                  {summaryQuery.data ? formatCurrency(summaryQuery.data.totalApproved) : '...'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {summaryQuery.data ? `${summaryQuery.data.approvedCount} phiếu` : '---'}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Đang chờ duyệt</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="text-3xl font-bold text-amber-600">
+                  {summaryQuery.data ? formatCurrency(summaryQuery.data.totalPending) : '...'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {summaryQuery.data ? `${summaryQuery.data.pendingCount} phiếu` : '---'}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Đã từ chối</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <div className="text-3xl font-bold text-red-600">
+                  {summaryQuery.data ? formatCurrency(summaryQuery.data.totalRejected) : '...'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {summaryQuery.data ? `${summaryQuery.data.rejectedCount} phiếu` : '---'}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Số dư ví công ty</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">
+                  {summaryQuery.data ? formatCurrency(summaryQuery.data.walletBalance) : '...'}
+                </div>
+                <p className="text-xs text-muted-foreground">Tổng các ví đang theo dõi</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Danh sách phiếu chi</CardTitle>
+                <p className="text-sm text-muted-foreground">Lọc theo trạng thái, danh mục và thời gian</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Select
+                  value={statusFilterValue as string}
+                  onValueChange={(value) =>
+                    applyFilters({ status: value === 'ALL' ? undefined : (value as ExpenseVoucherStatus) })
+                  }
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="DRAFT">{statusLabels.DRAFT}</SelectItem>
+                    <SelectItem value="PENDING">{statusLabels.PENDING}</SelectItem>
+                    <SelectItem value="APPROVED">{statusLabels.APPROVED}</SelectItem>
+                    <SelectItem value="REJECTED">{statusLabels.REJECTED}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={categoryFilterValue as string}
+                  onValueChange={(value) =>
+                    applyFilters({ category: value === 'ALL' ? undefined : (value as ExpenseVoucherCategory) })
+                  }
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Danh mục" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả danh mục</SelectItem>
+                    {(Object.keys(categoryLabels) as ExpenseVoucherCategory[]).map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {categoryLabels[category]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <DatePickerField
+                  value={filters.from ?? ''}
+                  onChange={(value) => applyFilters({ from: value || undefined })}
+                  placeholder="Từ ngày"
+                  allowClear
+                />
+                <DatePickerField
+                  value={filters.to ?? ''}
+                  onChange={(value) => applyFilters({ to: value || undefined })}
+                  placeholder="Đến ngày"
+                  allowClear
+                />
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    applyFilters({
+                      status: undefined,
+                      category: undefined,
+                      from: currentMonthRange.from,
+                      to: currentMonthRange.to,
+                    })
+                  }
+                >
+                  Xóa lọc
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {vouchersQuery.isLoading ? (
+                <div className="py-6 text-center text-muted-foreground">Đang tải dữ liệu...</div>
+              ) : vouchers.length === 0 ? (
+                <div className="py-6 text-center text-muted-foreground">
+                  Chưa có phiếu chi nào với bộ lọc hiện tại
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Mã phiếu</TableHead>
+                        <TableHead>Tiêu đề</TableHead>
+                        <TableHead>Danh mục</TableHead>
+                        <TableHead className="text-right">Số tiền</TableHead>
+                        <TableHead>Trạng thái</TableHead>
+                        <TableHead>Người tạo</TableHead>
+                        <TableHead>Ngày tạo</TableHead>
+                        <TableHead className="text-right">Thao tác</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vouchers.map((voucher) => (
+                        <TableRow key={voucher.id}>
+                          <TableCell className="font-medium">{voucher.code || `#${voucher.id}`}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span>{voucher.title}</span>
+                              {voucher.note && (
+                                <span className="text-xs text-muted-foreground">{voucher.note}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{categoryLabels[voucher.category]}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-gray-900">
+                            {formatCurrency(voucher.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariants[voucher.status]}>
+                              {statusLabels[voucher.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span>{voucher.createdByName || voucher.createdBy}</span>
+                              <span className="text-xs text-muted-foreground">{voucher.payeeName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatDateTime(voucher.createdAt)}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openHistoryDialog(voucher)}>
+                                Chi tiết
+                              </Button>
+                              {voucher.attachments.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openAttachment(voucher.attachments[0])}
+                                >
+                                  Xem file
+                                </Button>
+                              )}
+                              {voucher.status === 'DRAFT' && isAccountant && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleStatusChange(voucher, 'PENDING')}
+                                  disabled={statusMutation.isPending}
+                                >
+                                  Gửi duyệt
+                                </Button>
+                              )}
+                              {voucher.status === 'PENDING' && isAdmin && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleStatusChange(voucher, 'APPROVED')}
+                                    disabled={statusMutation.isPending}
+                                  >
+                                    Duyệt
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleStatusChange(voucher, 'REJECTED')}
+                                    disabled={statusMutation.isPending}
+                                  >
+                                    Từ chối
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      Trang {((filters.page ?? 0) + 1)} /{' '}
+                      {Math.max(1, Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)))}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={(filters.page ?? 0) === 0}
+                        onClick={() => applyFilters({ page: Math.max(0, (filters.page ?? 0) - 1) })}
+                      >
+                        Trước
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          (filters.page ?? 0) >=
+                          Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)) - 1
+                        }
+                        onClick={() => applyFilters({ page: (filters.page ?? 0) + 1 })}
+                      >
+                        Sau
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {isDriverExpenseTab && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Ứng phí tài xế</CardTitle>
+                <p className="text-sm text-muted-foreground">Theo dõi và duyệt các khoản ứng phí</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Select
+                  value={driverStatusFilter}
+                  onValueChange={(value) => setDriverStatusFilter(value as 'all' | DriverExpenseStatus)}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="requested">Chờ duyệt</SelectItem>
+                    <SelectItem value="approved">Đã duyệt</SelectItem>
+                    <SelectItem value="deducted">Đã khấu trừ</SelectItem>
+                    <SelectItem value="rejected">Từ chối</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedDriverFilter || 'all'}
+                  onValueChange={(value) => setSelectedDriverFilter(value === 'all' ? '' : value)}
+                >
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder="Lọc theo tài xế" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả tài xế</SelectItem>
+                    {driversQuery.data?.map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name} - {driver.phone}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {driverAdvancesQuery.isLoading ? (
+                <div className="py-6 text-center text-muted-foreground">Đang tải dữ liệu...</div>
+              ) : driverAdvancesQuery.data?.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Mã phiếu</TableHead>
+                      <TableHead>Tài xế</TableHead>
+                      <TableHead>Mã chuyến</TableHead>
+                      <TableHead>Loại chi phí</TableHead>
+                      <TableHead>Số tiền</TableHead>
+                      <TableHead>Ngày tạo</TableHead>
+                      <TableHead>Trạng thái</TableHead>
+                      <TableHead>Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {driverAdvancesQuery.data.map((advance) => {
+                      const driver = driversQuery.data?.find((d) => d.id === advance.driverId);
+                      return (
+                        <TableRow key={advance.id}>
+                          <TableCell className="font-medium">{advance.id}</TableCell>
+                          <TableCell>{driver?.name || advance.driverId}</TableCell>
+                          <TableCell>{advance.tripId ? `#${advance.tripId}` : '--'}</TableCell>
+                          <TableCell>{driverExpenseLabels[advance.expenseType]}</TableCell>
+                          <TableCell>{advance.amount.toLocaleString('vi-VN')} đ</TableCell>
+                          <TableCell>{formatDateTime(advance.requestedAt)}</TableCell>
+                          <TableCell>
+                            <Badge variant={driverStatusVariants[advance.status]}>
+                              {driverStatusLabels[advance.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setDriverAdvancePreview(advance);
+                                setDriverAdvanceImageIndex(0);
+                                setApprovalNote('');
+                              }}
+                            >
+                              Xem chi tiết
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="py-6 text-center text-muted-foreground">
+                  Chưa có phiếu ứng phí nào với bộ lọc hiện tại
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Dialog open={isFormOpen} onOpenChange={(open) => {
         if (!open) {
           setIsFormOpen(false);
           setHistoryVoucherId(null);
-      setCurrentVoucher(null);
+	  setCurrentVoucher(null);
           resetForm();
         }
       }}>
@@ -763,6 +1163,157 @@ const ExpenseVouchersPage: React.FC = () => {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!driverAdvancePreview}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDriverAdvancePreview(null);
+            setApprovalNote('');
+            setDepositImages([]);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Chi tiết phiếu ứng phí tài xế</DialogTitle>
+          </DialogHeader>
+          {driverAdvancePreview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Mã phiếu</p>
+                  <p className="font-medium">{driverAdvancePreview.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Tài xế</p>
+                  <p className="font-medium">
+                    {driversQuery.data?.find((d) => d.id === driverAdvancePreview.driverId)?.name
+                      || `#${driverAdvancePreview.driverId}`}
+                  </p>
+                </div>
+                {driverAdvancePreview.tripId && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Chuyến</p>
+                    <p className="font-medium">#{driverAdvancePreview.tripId}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Loại chi phí</p>
+                  <p className="font-medium">
+                    {driverExpenseLabels[driverAdvancePreview.expenseType]}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Số tiền</p>
+                  <p className="font-medium">
+                    {driverAdvancePreview.amount.toLocaleString('vi-VN')} đ
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Ngày yêu cầu</p>
+                  <p className="font-medium">{formatDateTime(driverAdvancePreview.requestedAt)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Trạng thái</p>
+                  <Badge variant={driverStatusVariants[driverAdvancePreview.status]}>
+                    {driverStatusLabels[driverAdvancePreview.status]}
+                  </Badge>
+                </div>
+                {driverAdvancePreview.note && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Ghi chú từ tài xế</p>
+                    <p className="whitespace-pre-wrap">{driverAdvancePreview.note}</p>
+                  </div>
+                )}
+              </div>
+
+              {driverAdvancePreview.attachments?.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Hình ảnh tài xế gửi lên</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {driverAdvancePreview.attachments.map((attachment, index) => (
+                      <div
+                        key={index}
+                        className="relative aspect-video bg-gray-100 rounded-md overflow-hidden"
+                      >
+                        <img
+                          src={driverAdvanceAttachmentUrls[index] || ''}
+                          alt={`Hình ảnh ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {driverAdvancePreview.status === 'requested' && (isAccountant || isAdmin) && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Xác nhận phiếu ứng phí</p>
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Ghi chú cho quyết định duyệt / từ chối (nếu có)"
+                        value={approvalNote}
+                        onChange={(e) => setApprovalNote(e.target.value)}
+                      />
+                      <div>
+                        <input
+                          type="file"
+                          ref={depositFileInputRef}
+                          className="hidden"
+                          accept="image/*"
+                          multiple
+                          onChange={handleDepositImagesSelect}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => depositFileInputRef.current?.click()}
+                          disabled={depositImagesLoading}
+                        >
+                          {depositImagesLoading ? 'Đang xử lý ảnh...' : 'Tải lên ảnh xác nhận chi'}
+                        </Button>
+                        {depositImages.length > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Đã chọn {depositImages.length} ảnh xác nhận
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setDriverAdvancePreview(null);
+                            setApprovalNote('');
+                            setDepositImages([]);
+                          }}
+                        >
+                          Đóng
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleApproveAdvance('rejected')}
+                          disabled={driverAdvanceStatusMut.isPending}
+                        >
+                          Từ chối
+                        </Button>
+                        <Button
+                          onClick={() => handleApproveAdvance('approved')}
+                          disabled={driverAdvanceStatusMut.isPending}
+                        >
+                          Duyệt phiếu
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
