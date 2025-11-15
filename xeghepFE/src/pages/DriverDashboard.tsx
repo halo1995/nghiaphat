@@ -193,52 +193,52 @@ const DriverDashboard = () => {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <header className="flex items-center sticky top-0 z-10 gap-4 border-b bg-white px-6 py-4 shadow-sm">
+      <header className="flex items-center sticky top-0 z-10 gap-3 border-b bg-white px-4 py-3 shadow-sm md:gap-4 md:px-6 md:py-4">
         <SidebarTrigger />
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-800">Lịch Trình Của Tôi</h1>
-          <p className="text-sm text-muted-foreground">Xem và quản lý các chuyến đi được phân công</p>
+          <h1 className="text-xl font-bold text-gray-800 md:text-2xl">Lịch Trình Của Tôi</h1>
+          <p className="text-xs text-muted-foreground md:text-sm">Xem và quản lý các chuyến đi được phân công</p>
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 px-3 py-4 md:p-6">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 md:space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Tổng chuyến</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.total}</p>
+                <p className="text-2xl font-bold text-blue-600 md:text-3xl">{stats.total}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Sắp đi</p>
-                <p className="text-3xl font-bold text-purple-600">{stats.upcoming}</p>
+                <p className="text-2xl font-bold text-purple-600 md:text-3xl">{stats.upcoming}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Đang chạy</p>
-                <p className="text-3xl font-bold text-green-600">{stats.inProgress}</p>
+                <p className="text-2xl font-bold text-green-600 md:text-3xl">{stats.inProgress}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Hoàn thành</p>
-                <p className="text-3xl font-bold text-gray-600">{stats.completed}</p>
+                <p className="text-2xl font-bold text-gray-600 md:text-3xl">{stats.completed}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Tạm ứng đã duyệt</p>
-                <p className="text-3xl font-bold text-amber-600">{formatCurrency(outstandingAdvance)}</p>
+                <p className="text-2xl font-bold text-amber-600 md:text-3xl">{formatCurrency(outstandingAdvance)}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Tạm ứng đang chờ</p>
-                <p className="text-3xl font-bold text-purple-600">{formatCurrency(pendingAdvance)}</p>
+                <p className="text-2xl font-bold text-purple-600 md:text-3xl">{formatCurrency(pendingAdvance)}</p>
               </CardContent>
             </Card>
           </div>
@@ -246,15 +246,17 @@ const DriverDashboard = () => {
           {/* Date Filter */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex items-center gap-4">
-                <Calendar className="text-gray-600" size={20} />
-                <div className="max-w-xs w-full">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Calendar className="text-gray-600" size={20} />
+                  <div className="w-full max-w-xs">
                   <DatePickerField
                     value={selectedDate}
                     onChange={setSelectedDate}
                   />
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground sm:text-sm">
                   Hiển thị {sortedTrips.length} chuyến trong ngày
                 </p>
               </div>
@@ -272,53 +274,111 @@ const DriverDashboard = () => {
               ) : driverAdvances.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">Bạn chưa có yêu cầu tạm ứng nào</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-left">
-                      <tr>
-                        <th className="px-6 py-3 font-medium text-muted-foreground">Thời gian</th>
-                        <th className="px-6 py-3 font-medium text-muted-foreground">Loại phí</th>
-                        <th className="px-6 py-3 font-medium text-muted-foreground text-right">Số tiền</th>
-                        <th className="px-6 py-3 font-medium text-muted-foreground">Trạng thái</th>
-                        <th className="px-6 py-3 font-medium text-muted-foreground">Ghi chú</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {driverAdvances.map((advance) => (
-                        <tr key={advance.id} className="border-t">
-                          <td className="px-6 py-3">{new Date(advance.requestedAt).toLocaleString('vi-VN')}</td>
-                          <td className="px-6 py-3">{driverExpenseLabels[advance.expenseType]}</td>
-                          <td className="px-6 py-3 text-right font-medium text-gray-900">{advance.amount.toLocaleString('vi-VN')} ₫</td>
-                          <td className="px-6 py-3">
-                            <Badge variant={driverStatusVariants[advance.status]}>{driverStatusLabels[advance.status]}</Badge>
-                          </td>
-                          <td className="px-6 py-3">
-                            <div className="flex flex-col gap-1">
-                              {advance.note && <span>{advance.note}</span>}
-                              {advance.rejectionReason && (
-                                <span className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</span>
-                              )}
-                              {advance.tripId && (
-                                <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
-                              )}
-                              {advance.attachments.length > 0 && (
-                                <div className="flex flex-col gap-1">
-                                  {advance.attachments.map((attachment) => (
-                                    <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
-                                      <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                        {attachment.fileName}
-                                      </a>
-                                    </Button>
-                                  ))}
-                                </div>
-                              )}
+                <>
+                  {/* Mobile: card list */}
+                  <div className="space-y-3 px-4 py-4 md:hidden">
+                    {driverAdvances.map((advance) => (
+                      <div key={advance.id} className="rounded-lg border bg-white p-3 text-sm shadow-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-900">
+                              {driverExpenseLabels[advance.expenseType]}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(advance.requestedAt).toLocaleString('vi-VN')}
+                            </span>
+                          </div>
+                          <Badge variant={driverStatusVariants[advance.status]}>
+                            {driverStatusLabels[advance.status]}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Số tiền</span>
+                          <span className="text-base font-semibold text-gray-900">
+                            {advance.amount.toLocaleString('vi-VN')} ₫
+                          </span>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          {advance.tripId && (
+                            <p className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</p>
+                          )}
+                          {advance.note && (
+                            <p className="text-xs text-gray-700">Ghi chú: {advance.note}</p>
+                          )}
+                          {advance.rejectionReason && (
+                            <p className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</p>
+                          )}
+                          {advance.attachments.length > 0 && (
+                            <div className="mt-1 space-y-1">
+                              {advance.attachments.map((attachment) => (
+                                <Button
+                                  key={attachment.id}
+                                  variant="link"
+                                  size="sm"
+                                  className="h-6 px-0 text-xs"
+                                  asChild
+                                >
+                                  <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                    {attachment.fileName}
+                                  </a>
+                                </Button>
+                              ))}
                             </div>
-                          </td>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 text-left">
+                        <tr>
+                          <th className="px-6 py-3 font-medium text-muted-foreground">Thời gian</th>
+                          <th className="px-6 py-3 font-medium text-muted-foreground">Loại phí</th>
+                          <th className="px-6 py-3 font-medium text-muted-foreground text-right">Số tiền</th>
+                          <th className="px-6 py-3 font-medium text-muted-foreground">Trạng thái</th>
+                          <th className="px-6 py-3 font-medium text-muted-foreground">Ghi chú</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {driverAdvances.map((advance) => (
+                          <tr key={advance.id} className="border-t">
+                            <td className="px-6 py-3">{new Date(advance.requestedAt).toLocaleString('vi-VN')}</td>
+                            <td className="px-6 py-3">{driverExpenseLabels[advance.expenseType]}</td>
+                            <td className="px-6 py-3 text-right font-medium text-gray-900">{advance.amount.toLocaleString('vi-VN')} ₫</td>
+                            <td className="px-6 py-3">
+                              <Badge variant={driverStatusVariants[advance.status]}>{driverStatusLabels[advance.status]}</Badge>
+                            </td>
+                            <td className="px-6 py-3">
+                              <div className="flex flex-col gap-1">
+                                {advance.note && <span>{advance.note}</span>}
+                                {advance.rejectionReason && (
+                                  <span className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</span>
+                                )}
+                                {advance.tripId && (
+                                  <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
+                                )}
+                                {advance.attachments.length > 0 && (
+                                  <div className="flex flex-col gap-1">
+                                    {advance.attachments.map((attachment) => (
+                                      <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
+                                        <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
+                                          {attachment.fileName}
+                                        </a>
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
