@@ -415,113 +415,121 @@ const DriverDashboard = () => {
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card className="hover:shadow-lg transition-shadow">
-                      <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-blue-100 p-3 rounded-lg">
-                            <Clock className="text-blue-600" size={24} />
+                      <CardContent className="p-4 md:p-6">
+                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-lg bg-blue-100 p-2.5 md:p-3">
+                              <Clock className="text-blue-600" size={22} />
+                            </div>
+                            <div>
+                              <p className="text-xl font-bold text-gray-800 md:text-2xl">
+                                {new Date(trip.pickupTime).toLocaleTimeString('vi-VN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                              <p className="text-xs text-muted-foreground md:text-sm">Giờ đón khách</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-2xl font-bold text-gray-800">
-                              {new Date(trip.pickupTime).toLocaleTimeString('vi-VN', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                            <p className="text-sm text-muted-foreground">Giờ đón khách</p>
-                          </div>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[trip.status]}`}>
-                          {trip.status}
-                        </span>
-                      </div>
-
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="text-green-600 mt-1 flex-shrink-0" size={18} />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Điểm đón</p>
-                            <p className="text-base text-gray-900">{trip.pickupLocation}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <MapPin className="text-red-600 mt-1 flex-shrink-0" size={18} />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700">Điểm trả</p>
-                            <p className="text-base text-gray-900">{trip.dropoffLocation}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-4 pt-4 border-t md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Users size={16} />
-                            {trip.passengers} người
+                          <span
+                            className={`inline-flex w-fit items-center justify-center rounded-full border px-3 py-1 text-xs font-medium ${statusColors[trip.status]}`}
+                          >
+                            {trip.status}
                           </span>
-                          <span>📏 {trip.distance} km</span>
-                          <span className="font-semibold text-gray-800">{trip.customerName}</span>
-                          <span>{trip.customerPhone}</span>
-                          <div className="flex flex-col">
-                            <span
-                              className={`flex items-center gap-1 font-semibold ${
-                                amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'
-                              }`}
+                        </div>
+
+                        <div className="mb-4 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <MapPin className="mt-1 flex-shrink-0 text-green-600" size={18} />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-gray-700 md:text-sm">Điểm đón</p>
+                              <p className="text-sm text-gray-900 md:text-base">{trip.pickupLocation}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <MapPin className="mt-1 flex-shrink-0 text-red-600" size={18} />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-gray-700 md:text-sm">Điểm trả</p>
+                              <p className="text-sm text-gray-900 md:text-base">{trip.dropoffLocation}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-4 border-t pt-4 md:flex-row md:items-center md:justify-between">
+                          <div className="flex flex-col gap-2 text-xs text-muted-foreground md:flex-row md:flex-wrap md:items-center md:gap-4 md:text-sm">
+                            <div className="flex items-center gap-1">
+                              <Users size={16} />
+                              <span>{trip.passengers} người</span>
+                              <span className="mx-1 hidden text-gray-300 md:inline">•</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span>📏 {trip.distance} km</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 md:flex-row md:items-center md:gap-2">
+                              <span className="font-semibold text-gray-800">{trip.customerName}</span>
+                              <span className="text-xs text-gray-600 md:text-sm">{trip.customerPhone}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span
+                                className={`flex items-center gap-1 text-sm font-semibold md:text-base ${
+                                  amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'
+                                }`}
+                              >
+                                <Wallet size={16} />
+                                {reconciledAmount > 0
+                                  ? `Cần thu khách: ${formatCurrency(amountToCollect)}`
+                                  : `Thu khách: ${formatCurrency(trip.price)}`}
+                              </span>
+                              {reconciledAmount > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  Đã đối soát: {formatCurrency(reconciledAmount)}
+                                  {pendingAmount > 0 && ` • Chờ đối soát: ${formatCurrency(pendingAmount)}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2 pt-1 md:flex-row md:flex-wrap md:items-center md:justify-end">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full gap-2 text-sm md:w-auto"
+                              onClick={() => openAdvanceDialogForTrip(trip)}
                             >
                               <Wallet size={16} />
-                              {reconciledAmount > 0
-                                ? `Cần thu khách: ${formatCurrency(amountToCollect)}`
-                                : `Thu khách: ${formatCurrency(trip.price)}`}
-                            </span>
-                            {reconciledAmount > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                Đã đối soát: {formatCurrency(reconciledAmount)}
-                                {pendingAmount > 0 && ` • Chờ đối soát: ${formatCurrency(pendingAmount)}`}
-                              </span>
+                              Tạm ứng phí
+                            </Button>
+
+                            {trip.status === 'Đã phân xe' && (
+                              <Link to={`/trip-execution/${trip.id}`} className="w-full md:w-auto">
+                                <Button className="w-full gap-2 bg-green-600 text-sm hover:bg-green-700 md:w-auto">
+                                  Bắt đầu chuyến
+                                  <ArrowRight size={16} />
+                                </Button>
+                              </Link>
+                            )}
+
+                            {(trip.status === 'Đang đón' || trip.status === 'Đang đi') && (
+                              <Link to={`/trip-execution/${trip.id}`} className="w-full md:w-auto">
+                                <Button className="w-full gap-2 bg-blue-600 text-sm hover:bg-blue-700 md:w-auto">
+                                  Tiếp tục
+                                  <ArrowRight size={16} />
+                                </Button>
+                              </Link>
+                            )}
+
+                            {trip.status === 'Hoàn thành' && (
+                              <div className="flex w-full items-center justify-start gap-2 text-green-600 md:w-auto md:justify-end">
+                                <CheckCircle size={20} />
+                                <span className="text-sm font-medium md:text-base">Đã hoàn thành</span>
+                              </div>
                             )}
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => openAdvanceDialogForTrip(trip)}
-                          >
-                            <Wallet size={16} />
-                            Tạm ứng phí
-                          </Button>
-
-                          {trip.status === 'Đã phân xe' && (
-                            <Link to={`/trip-execution/${trip.id}`}>
-                              <Button className="gap-2 bg-green-600 hover:bg-green-700">
-                                Bắt đầu chuyến
-                                <ArrowRight size={16} />
-                              </Button>
-                            </Link>
-                          )}
-
-                          {(trip.status === 'Đang đón' || trip.status === 'Đang đi') && (
-                            <Link to={`/trip-execution/${trip.id}`}>
-                              <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
-                                Tiếp tục
-                                <ArrowRight size={16} />
-                              </Button>
-                            </Link>
-                          )}
-
-                          {trip.status === 'Hoàn thành' && (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <CheckCircle size={20} />
-                              <span className="font-medium">Đã hoàn thành</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
 
                       {trip.notes && (
-                        <div className="mt-4 pt-4 border-t">
-                          <p className="text-sm text-gray-600">
+                        <div className="mt-3 border-t pt-3 md:mt-4 md:pt-4">
+                          <p className="text-xs text-gray-600 md:text-sm">
                             <span className="font-medium">Ghi chú:</span> {trip.notes}
                           </p>
                         </div>
