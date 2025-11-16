@@ -353,11 +353,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         switch (targetStatus) {
             case APPROVED -> {
+                // Bước 1: Admin duyệt cho phép tạm ứng, KHÔNG trừ ví công ty ở đây
                 advance.setApprovedAt(now);
                 advance.setApprovedBy(actionUser.getId());
-                // Không điều chỉnh công nợ tài xế ở đây, chỉ hạch toán ví công ty
+            }
+            case TRANSFERRED -> {
+                // Bước 2: Kế toán xác nhận đã chuyển tiền cho tài xế, trừ ví công ty
+                advance.setTransferredAt(now);
+                advance.setTransferredBy(actionUser.getId());
                 debitCompanyWallet(advance.getAmount(),
-                        "Duyệt tạm ứng tài xế",
+                        "Chuyển tiền tạm ứng tài xế",
                         PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
                         advance.getId(),
                         actionUser.getId());
@@ -368,8 +373,8 @@ public class PaymentServiceImpl implements PaymentService {
             }
             case REJECTED -> {
                 advance.setRejectionReason(req.getRejectionReason());
-                if (advance.getStatus() == DriverExpenseAdvance.Status.APPROVED) {
-                    // Không đảo lại công nợ tài xế, chỉ hoàn lại vào ví công ty
+                if (advance.getStatus() == DriverExpenseAdvance.Status.TRANSFERRED) {
+                    // Đã trừ ví công ty ở bước TRANSFERRED nên khi hủy cần hoàn lại ví công ty
                     creditCompanyWallet(advance.getAmount(),
                             "Hoàn tạm ứng bị từ chối",
                             PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
@@ -721,8 +726,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     private boolean isAllowedDriverAdvanceTransition(DriverExpenseAdvance.Status current, DriverExpenseAdvance.Status target) {
         return switch (current) {
-            case REQUESTED -> target == DriverExpenseAdvance.Status.APPROVED || target == DriverExpenseAdvance.Status.REJECTED;
-            case APPROVED -> target == DriverExpenseAdvance.Status.DEDUCTED || target == DriverExpenseAdvance.Status.REJECTED;
+            case REQUESTED -> target == DriverExpenseAdvance.Status.APPROVED
+                    || target == DriverExpenseAdvance.Status.REJECTED;
+            case APPROVED -> target == DriverExpenseAdvance.Status.TRANSFERRED
+                    || target == DriverExpenseAdvance.Status.REJECTED;
+            case TRANSFERRED -> target == DriverExpenseAdvance.Status.DEDUCTED
+                    || target == DriverExpenseAdvance.Status.REJECTED;
             case DEDUCTED, REJECTED -> false;
         };
     }
@@ -770,10 +779,17 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void enforceDriverAdvancePrivileges(User actionUser, DriverExpenseAdvance.Status targetStatus) {
         if (targetStatus == DriverExpenseAdvance.Status.APPROVED || targetStatus == DriverExpenseAdvance.Status.REJECTED) {
+            // Admin duyệt hoặc từ chối yêu cầu tạm ứng
             requireAdmin(actionUser);
             return;
         }
+        if (targetStatus == DriverExpenseAdvance.Status.TRANSFERRED) {
+            // Kế toán xác nhận đã chuyển tiền cho tài xế
+            requireAccountant(actionUser);
+            return;
+        }
         if (targetStatus == DriverExpenseAdvance.Status.DEDUCTED) {
+            // Khi khấu trừ tạm ứng với tài xế có thể do Admin hoặc Kế toán thực hiện
             requireAdminOrAccountant(actionUser);
         }
     }
@@ -789,6 +805,12 @@ public class PaymentServiceImpl implements PaymentService {
     private void requireAdmin(User user) {
         if (user.getRole() != User.UserRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ admin mới được duyệt phiếu tạm ứng");
+        }
+    }
+
+    private void requireAccountant(User user) {
+        if (user.getRole() != User.UserRole.ACCOUNTANT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán mới được xác nhận đã chuyển tiền tạm ứng");
         }
     }
 

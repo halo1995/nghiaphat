@@ -116,7 +116,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
     }
 
     @Override
-    public ExpenseVoucherDTO updateStatus(Long id, ExpenseVoucherStatusUpdateRequest request) {
+    public ExpenseVoucherDTO updateStatus(Long id, ExpenseVoucherStatusUpdateRequest request, List<MultipartFile> attachments) {
         ExpenseVoucher voucher = voucherRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu chi"));
 
@@ -143,6 +143,17 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ phiếu đang chờ duyệt mới được duyệt");
                 }
                 voucher = approveVoucher(voucher, actor.getId(), request.getNote());
+            }
+            case PAID -> {
+                requireAccountantOnly(actor);
+                if (currentStatus != ExpenseVoucher.Status.APPROVED) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ phiếu đã duyệt mới được xác nhận chuyển tiền");
+                }
+                // Yêu cầu có ảnh chuyển tiền mới được trừ tiền
+                if (attachments == null || attachments.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần upload ảnh chuyển tiền để xác nhận");
+                }
+                voucher = markAsPaid(voucher, actor.getId(), request.getNote(), attachments);
             }
             case REJECTED -> {
                 requireAdminPrivileges(actor);
@@ -325,10 +336,30 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         voucher.setApprovedAt(new Date());
         voucher.setUpdatedAt(new Date());
 
-        applyApprovalImpact(voucher, actorId, note);
+        // Không trừ tiền khi duyệt cho TẤT CẢ phiếu chi
+        // Tiền sẽ được trừ khi kế toán xác nhận chuyển tiền (trạng thái PAID)
+
         ExpenseVoucher saved = voucherRepository.save(voucher);
         recordHistory(saved.getId(), ExpenseVoucher.Status.PENDING, ExpenseVoucher.Status.APPROVED, actorId,
                 note != null ? note : "Duyệt chi");
+        return saved;
+    }
+
+    private ExpenseVoucher markAsPaid(ExpenseVoucher voucher, Long actorId, String note, List<MultipartFile> attachments) {
+        voucher.setStatus(ExpenseVoucher.Status.PAID);
+        voucher.setPaidBy(actorId);
+        voucher.setPaidAt(new Date());
+        voucher.setUpdatedAt(new Date());
+
+        // Lưu ảnh chuyển tiền
+        storeAttachments(voucher.getId(), attachments);
+
+        // Trừ tiền từ ví khi kế toán xác nhận đã chuyển tiền (chỉ khi có ảnh)
+        applyPaymentImpact(voucher, actorId, note);
+
+        ExpenseVoucher saved = voucherRepository.save(voucher);
+        recordHistory(saved.getId(), ExpenseVoucher.Status.APPROVED, ExpenseVoucher.Status.PAID, actorId,
+                note != null ? note : "Xác nhận đã chuyển tiền");
         return saved;
     }
 
@@ -353,29 +384,54 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
 
         double currentBalance = Objects.requireNonNullElse(wallet.getBalance(), 0.0);
 
-        // Với phiếu chi tạm ứng tài xế đã hạch toán ví khi duyệt tạm ứng (PaymentService),
-        // không trừ thêm vào ví lần nữa để tránh ghi nhận trùng.
-        boolean isDriverAdvanceVoucher =
-                voucher.getCategory() == ExpenseVoucher.Category.DRIVER_ADVANCE
-                        && voucher.getDriverExpenseAdvanceId() != null;
-
-        double newBalance = currentBalance;
-        double transactionAmount = 0.0;
-
-        if (!isDriverAdvanceVoucher) {
-            newBalance = currentBalance - voucher.getAmount();
-            transactionAmount = voucher.getAmount();
-            wallet.setBalance(newBalance);
-            walletRepository.save(wallet);
+        // Kiểm tra số dư ví trước khi trừ
+        if (currentBalance < voucher.getAmount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    String.format("Số dư ví không đủ. Số dư hiện tại: %,.0f ₫, số tiền cần chi: %,.0f ₫",
+                            currentBalance, voucher.getAmount()));
         }
+
+        double newBalance = currentBalance - voucher.getAmount();
+        wallet.setBalance(newBalance);
+        walletRepository.save(wallet);
 
         CompanyTransaction transaction = CompanyTransaction.builder()
                 .walletId(wallet.getId())
-                .amount(transactionAmount)
+                .amount(voucher.getAmount())
                 .transactionType(CompanyTransaction.TransactionType.EXPENSE)
                 .referenceType(PaymentAttachment.ReferenceType.EXPENSE_VOUCHER.name())
                 .referenceId(voucher.getId())
                 .description(note != null ? note : "Chi phiếu " + voucher.getTitle())
+                .createdBy(actorId)
+                .balanceAfter(newBalance)
+                .build();
+        transactionRepository.save(transaction);
+    }
+
+    private void applyPaymentImpact(ExpenseVoucher voucher, Long actorId, String note) {
+        CompanyWallet wallet = walletRepository.findById(voucher.getWalletId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không tìm thấy ví công ty"));
+
+        double currentBalance = Objects.requireNonNullElse(wallet.getBalance(), 0.0);
+
+        // Kiểm tra số dư ví trước khi trừ
+        if (currentBalance < voucher.getAmount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    String.format("Số dư ví không đủ. Số dư hiện tại: %,.0f ₫, số tiền cần chi: %,.0f ₫",
+                            currentBalance, voucher.getAmount()));
+        }
+
+        double newBalance = currentBalance - voucher.getAmount();
+        wallet.setBalance(newBalance);
+        walletRepository.save(wallet);
+
+        CompanyTransaction transaction = CompanyTransaction.builder()
+                .walletId(wallet.getId())
+                .amount(voucher.getAmount())
+                .transactionType(CompanyTransaction.TransactionType.EXPENSE)
+                .referenceType(PaymentAttachment.ReferenceType.EXPENSE_VOUCHER.name())
+                .referenceId(voucher.getId())
+                .description(note != null ? note : "Xác nhận chuyển tiền - " + voucher.getTitle())
                 .createdBy(actorId)
                 .balanceAfter(newBalance)
                 .build();
@@ -435,6 +491,12 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         }
     }
 
+    private void requireAccountantOnly(User user) {
+        if (user.getRole() != User.UserRole.ACCOUNTANT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán mới được xác nhận chuyển tiền");
+        }
+    }
+
     private void requireAdminPrivileges(User user) {
         if (user.getRole() != User.UserRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ admin mới được duyệt phiếu chi");
@@ -484,6 +546,9 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
                 .approvedBy(voucher.getApprovedBy())
                 .approvedByName(resolveUserName(voucher.getApprovedBy(), userCache))
                 .approvedAt(formatDate(voucher.getApprovedAt()))
+                .paidBy(voucher.getPaidBy())
+                .paidByName(resolveUserName(voucher.getPaidBy(), userCache))
+                .paidAt(formatDate(voucher.getPaidAt()))
                 .rejectedBy(voucher.getRejectedBy())
                 .rejectedByName(resolveUserName(voucher.getRejectedBy(), userCache))
                 .rejectedAt(formatDate(voucher.getRejectedAt()))
@@ -502,6 +567,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
             addIfNotNull(userIds, voucher.getCreatedBy());
             addIfNotNull(userIds, voucher.getSubmittedBy());
             addIfNotNull(userIds, voucher.getApprovedBy());
+            addIfNotNull(userIds, voucher.getPaidBy());
             addIfNotNull(userIds, voucher.getRejectedBy());
         }
         return preloadUsers(userIds);

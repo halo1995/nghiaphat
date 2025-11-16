@@ -544,7 +544,18 @@ class ApiService {
   async updateExpenseVoucherStatus(
     id: number,
     payload: ExpenseVoucherStatusUpdatePayload,
+    attachments: File[] = [],
   ): Promise<ExpenseVoucherResponse> {
+    if (attachments.length > 0) {
+      const formData = this.buildMultipartPayload(payload, attachments);
+      const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}/status`), {
+        method: 'PATCH',
+        headers: this.getAuthHeaders('multipart'),
+        body: formData,
+      });
+      return this.handleResponse<ExpenseVoucherResponse>(response);
+    }
+
     const response = await fetch(this.buildUrl(`/expenses/vouchers/${id}/status`), {
       method: 'PATCH',
       headers: this.getAuthHeaders(),

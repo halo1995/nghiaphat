@@ -48,10 +48,17 @@ public class ExpenseVoucherController {
         return expenseVoucherService.update(id, request, Collections.emptyList());
     }
 
-    @PatchMapping("/vouchers/{id}/status")
+    @PatchMapping(value = "/vouchers/{id}/status", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ExpenseVoucherDTO updateStatusWithAttachments(@PathVariable Long id,
+                                                         @Valid @RequestPart("payload") ExpenseVoucherStatusUpdateRequest request,
+                                                         @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+        return expenseVoucherService.updateStatus(id, request, images == null ? Collections.emptyList() : images);
+    }
+
+    @PatchMapping(value = "/vouchers/{id}/status", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ExpenseVoucherDTO updateStatus(@PathVariable Long id,
                                           @Valid @RequestBody ExpenseVoucherStatusUpdateRequest request) {
-        return expenseVoucherService.updateStatus(id, request);
+        return expenseVoucherService.updateStatus(id, request, Collections.emptyList());
     }
 
     @GetMapping("/vouchers/{id}")

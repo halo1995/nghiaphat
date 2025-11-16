@@ -125,7 +125,7 @@ export interface CustomerAdvancePayment {
   attachments: PaymentAttachment[];
 }
 
-export type DriverExpenseStatus = 'requested' | 'approved' | 'deducted' | 'rejected';
+export type DriverExpenseStatus = 'requested' | 'approved' | 'transferred' | 'deducted' | 'rejected';
 export type DriverExpenseType = 'toll' | 'parking' | 'fuel' | 'other';
 
 export interface DriverExpenseAdvance {
@@ -212,6 +212,7 @@ const CUSTOMER_STATUS_TO_BACK: Record<CustomerAdvanceStatus, ApiCustomerAdvanceS
 const DRIVER_STATUS_TO_FRONT: Record<ApiDriverExpenseStatus, DriverExpenseStatus> = {
   REQUESTED: 'requested',
   APPROVED: 'approved',
+  TRANSFERRED: 'transferred',
   DEDUCTED: 'deducted',
   REJECTED: 'rejected',
 };
@@ -219,6 +220,7 @@ const DRIVER_STATUS_TO_FRONT: Record<ApiDriverExpenseStatus, DriverExpenseStatus
 const DRIVER_STATUS_TO_BACK: Record<DriverExpenseStatus, ApiDriverExpenseStatus> = {
   requested: 'REQUESTED',
   approved: 'APPROVED',
+  transferred: 'TRANSFERRED',
   deducted: 'DEDUCTED',
   rejected: 'REJECTED',
 };

@@ -87,6 +87,13 @@ public class ExpenseVoucher {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    @Column(name = "paid_by")
+    private Long paidBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "paid_at")
+    private Date paidAt;
+
     @PrePersist
     public void prePersist() {
         Date now = new Date();
@@ -110,6 +117,7 @@ public class ExpenseVoucher {
         DRAFT,
         PENDING,
         APPROVED,
+        PAID,
         REJECTED
     }
 

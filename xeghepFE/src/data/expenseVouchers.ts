@@ -36,6 +36,9 @@ export interface ExpenseVoucher {
   approvedBy?: string | null;
   approvedByName?: string | null;
   approvedAt?: string | null;
+  paidBy?: string | null;
+  paidByName?: string | null;
+  paidAt?: string | null;
   rejectedBy?: string | null;
   rejectedByName?: string | null;
   rejectedAt?: string | null;
@@ -106,6 +109,7 @@ export interface UpdateExpenseVoucherStatusInput {
   actionUserId: string;
   note?: string | null;
   rejectionReason?: string | null;
+  attachments?: File[];
 }
 
 const mapAttachment = (attachment: PaymentAttachmentResponse): PaymentAttachment => ({
@@ -141,6 +145,9 @@ const mapVoucher = (voucher: ApiExpenseVoucher): ExpenseVoucher => ({
   approvedBy: voucher.approvedBy ? voucher.approvedBy.toString() : undefined,
   approvedByName: voucher.approvedByName ?? undefined,
   approvedAt: voucher.approvedAt ?? undefined,
+  paidBy: voucher.paidBy ? voucher.paidBy.toString() : undefined,
+  paidByName: voucher.paidByName ?? undefined,
+  paidAt: voucher.paidAt ?? undefined,
   rejectedBy: voucher.rejectedBy ? voucher.rejectedBy.toString() : undefined,
   rejectedByName: voucher.rejectedByName ?? undefined,
   rejectedAt: voucher.rejectedAt ?? undefined,
@@ -225,7 +232,7 @@ export const updateExpenseVoucherStatus = async (input: UpdateExpenseVoucherStat
     note: input.note ?? null,
     rejectionReason: input.rejectionReason ?? null,
   };
-  const response = await apiService.updateExpenseVoucherStatus(Number(input.id), payload);
+  const response = await apiService.updateExpenseVoucherStatus(Number(input.id), payload, input.attachments ?? []);
   return mapVoucher(response);
 };
 

@@ -17,7 +17,7 @@ public interface ExpenseVoucherService {
 
     ExpenseVoucherDTO update(Long id, ExpenseVoucherRequest request, List<MultipartFile> attachments);
 
-    ExpenseVoucherDTO updateStatus(Long id, ExpenseVoucherStatusUpdateRequest request);
+    ExpenseVoucherDTO updateStatus(Long id, ExpenseVoucherStatusUpdateRequest request, List<MultipartFile> attachments);
 
     ExpenseVoucherDTO getById(Long id);
 

@@ -45,6 +45,7 @@ const statusLabels: Record<ExpenseVoucherStatus, string> = {
   DRAFT: 'Nháp',
   PENDING: 'Chờ duyệt',
   APPROVED: 'Đã duyệt',
+  PAID: 'Đã chuyển tiền',
   REJECTED: 'Từ chối',
 };
 
@@ -52,6 +53,7 @@ const statusVariants: Record<ExpenseVoucherStatus, 'default' | 'secondary' | 'ou
   DRAFT: 'outline',
   PENDING: 'secondary',
   APPROVED: 'default',
+  PAID: 'default',
   REJECTED: 'destructive',
 };
 
@@ -68,6 +70,7 @@ const categoryLabels: Record<ExpenseVoucherCategory, string> = {
 const driverStatusLabels: Record<DriverExpenseStatus, string> = {
   requested: 'Chờ duyệt',
   approved: 'Đã duyệt',
+  transferred: 'Đã chuyển tiền',
   deducted: 'Đã khấu trừ',
   rejected: 'Từ chối',
 };
@@ -75,6 +78,7 @@ const driverStatusLabels: Record<DriverExpenseStatus, string> = {
 const driverStatusVariants: Record<DriverExpenseStatus, 'outline' | 'default' | 'secondary' | 'destructive'> = {
   requested: 'outline',
   approved: 'secondary',
+  transferred: 'secondary',
   deducted: 'default',
   rejected: 'destructive',
 };
@@ -154,6 +158,12 @@ const ExpenseVouchersPage: React.FC = () => {
   const [approvalNote, setApprovalNote] = useState('');
   const [isDriverExpenseTab, setIsDriverExpenseTab] = useState(false);
   const [driverAdvanceImageIndex, setDriverAdvanceImageIndex] = useState(0);
+  const [isConfirmPaymentDialogOpen, setIsConfirmPaymentDialogOpen] = useState(false);
+  const [voucherToConfirm, setVoucherToConfirm] = useState<ExpenseVoucher | null>(null);
+  const [paymentImages, setPaymentImages] = useState<File[]>([]);
+  const [paymentNote, setPaymentNote] = useState('');
+  const paymentFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [paymentImagesLoading, setPaymentImagesLoading] = useState(false);
 
   const isAdmin = user?.role === 'ADMIN';
   const isAccountant = user?.role === 'ACCOUNTANT';
@@ -424,6 +434,15 @@ const ExpenseVouchersPage: React.FC = () => {
       return;
     }
 
+    // Nếu là xác nhận chuyển tiền, mở dialog để upload ảnh
+    if (status === 'PAID') {
+      setVoucherToConfirm(voucher);
+      setPaymentImages([]);
+      setPaymentNote('');
+      setIsConfirmPaymentDialogOpen(true);
+      return;
+    }
+
     const rejectionReason = status === 'REJECTED'
       ? window.prompt('Nhập lý do từ chối phiếu chi')?.trim()
       : undefined;
@@ -439,6 +458,65 @@ const ExpenseVouchersPage: React.FC = () => {
       actionUserId: user.id.toString(),
       rejectionReason: rejectionReason || null,
     });
+  };
+
+  const handleConfirmPayment = () => {
+    if (!voucherToConfirm || !user?.id) {
+      return;
+    }
+
+    if (paymentImages.length === 0) {
+      toast({ 
+        title: 'Thiếu ảnh chuyển tiền', 
+        description: 'Vui lòng upload ít nhất 1 ảnh chuyển tiền', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    statusMutation.mutate({
+      id: voucherToConfirm.id,
+      status: 'PAID',
+      actionUserId: user.id.toString(),
+      note: paymentNote || null,
+      attachments: paymentImages,
+    }, {
+      onSuccess: () => {
+        setIsConfirmPaymentDialogOpen(false);
+        setVoucherToConfirm(null);
+        setPaymentImages([]);
+        setPaymentNote('');
+      },
+    });
+  };
+
+  const handlePaymentImagesSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = '';
+    if (!files.length) {
+      return;
+    }
+    if (files.length > MAX_VOUCHER_IMAGES) {
+      toast({
+        title: 'Quá số lượng ảnh',
+        description: `Chỉ được chọn tối đa ${MAX_VOUCHER_IMAGES} ảnh`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setPaymentImagesLoading(true);
+    try {
+      const compressed = await compressImages(files);
+      setPaymentImages(compressed);
+    } catch (error) {
+      toast({
+        title: 'Không thể xử lý ảnh',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setPaymentImagesLoading(false);
+    }
   };
 
   const applyFilters = (partial: Partial<ExpenseVoucherQuery>) => {
@@ -537,8 +615,8 @@ const ExpenseVouchersPage: React.FC = () => {
     // Cập nhật trạng thái tạm ứng phí tài xế
     driverAdvanceStatusMut.mutate(payload, {
       onSuccess: (updatedAdvance) => {
-        // Nếu duyệt phiếu (approved) thì tự tạo 1 phiếu chi loại DRIVER_ADVANCE
-        if (status === 'approved' && updatedAdvance) {
+        // Nếu duyệt phiếu (approved hoặc transferred) thì tự tạo 1 phiếu chi loại DRIVER_ADVANCE
+        if ((status === 'approved' || status === 'transferred') && updatedAdvance) {
           const driver = driversQuery.data?.find((d) => d.id === updatedAdvance.driverId);
           const driverName = driver?.name || updatedAdvance.driverId;
 
@@ -556,7 +634,7 @@ const ExpenseVouchersPage: React.FC = () => {
             walletId: null,
             driverExpenseAdvanceId: updatedAdvance.id,
             submitImmediately: true,
-            attachments: [],
+            attachments: depositImages,
           });
         }
       },
@@ -728,6 +806,7 @@ const ExpenseVouchersPage: React.FC = () => {
                     <SelectItem value="DRAFT">{statusLabels.DRAFT}</SelectItem>
                     <SelectItem value="PENDING">{statusLabels.PENDING}</SelectItem>
                     <SelectItem value="APPROVED">{statusLabels.APPROVED}</SelectItem>
+                    <SelectItem value="PAID">{statusLabels.PAID}</SelectItem>
                     <SelectItem value="REJECTED">{statusLabels.REJECTED}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -871,6 +950,17 @@ const ExpenseVouchersPage: React.FC = () => {
                                   </Button>
                                 </>
                               )}
+                              {voucher.status === 'APPROVED' && 
+                               isAccountant && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => handleStatusChange(voucher, 'PAID')}
+                                  disabled={statusMutation.isPending}
+                                >
+                                  Xác nhận chuyển tiền
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -931,6 +1021,7 @@ const ExpenseVouchersPage: React.FC = () => {
                     <SelectItem value="all">Tất cả trạng thái</SelectItem>
                     <SelectItem value="requested">Chờ duyệt</SelectItem>
                     <SelectItem value="approved">Đã duyệt</SelectItem>
+                    <SelectItem value="transferred">Đã chuyển tiền</SelectItem>
                     <SelectItem value="deducted">Đã khấu trừ</SelectItem>
                     <SelectItem value="rejected">Từ chối</SelectItem>
                   </SelectContent>
@@ -1312,8 +1403,179 @@ const ExpenseVouchersPage: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {driverAdvancePreview.status === 'approved' && isAccountant && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Xác nhận đã chuyển tiền cho tài xế</p>
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Ghi chú hoặc thông tin giao dịch (nếu có)"
+                        value={approvalNote}
+                        onChange={(e) => setApprovalNote(e.target.value)}
+                      />
+                      <div>
+                        <input
+                          type="file"
+                          ref={depositFileInputRef}
+                          className="hidden"
+                          accept="image/*"
+                          multiple
+                          onChange={handleDepositImagesSelect}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => depositFileInputRef.current?.click()}
+                          disabled={depositImagesLoading}
+                        >
+                          {depositImagesLoading ? 'Đang xử lý ảnh...' : 'Tải lên ảnh chuyển tiền (nếu có)'}
+                        </Button>
+                        {depositImages.length > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Đã chọn {depositImages.length} ảnh chuyển tiền
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setDriverAdvancePreview(null);
+                            setApprovalNote('');
+                            setDepositImages([]);
+                          }}
+                        >
+                          Đóng
+                        </Button>
+                        <Button
+                          onClick={() => handleApproveAdvance('transferred')}
+                          disabled={driverAdvanceStatusMut.isPending}
+                        >
+                          Xác nhận đã chuyển tiền
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isConfirmPaymentDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsConfirmPaymentDialogOpen(false);
+            setVoucherToConfirm(null);
+            setPaymentImages([]);
+            setPaymentNote('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Xác nhận chuyển tiền</DialogTitle>
+          </DialogHeader>
+          {voucherToConfirm && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 bg-muted/50">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Mã phiếu</p>
+                    <p className="font-medium">{voucherToConfirm.code || `#${voucherToConfirm.id}`}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Tiêu đề</p>
+                    <p className="font-medium">{voucherToConfirm.title}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Số tiền</p>
+                    <p className="font-medium text-lg">{formatCurrency(voucherToConfirm.amount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Người nhận</p>
+                    <p className="font-medium">{voucherToConfirm.payeeName}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Ghi chú (nếu có)</label>
+                <Textarea
+                  placeholder="Nhập ghi chú về việc chuyển tiền..."
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Ảnh chuyển tiền *</label>
+                <p className="text-xs text-muted-foreground">
+                  Upload ảnh chứng từ chuyển tiền (tối đa {MAX_VOUCHER_IMAGES} ảnh)
+                </p>
+                <input
+                  type="file"
+                  ref={paymentFileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePaymentImagesSelect}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => paymentFileInputRef.current?.click()}
+                  disabled={paymentImagesLoading}
+                >
+                  {paymentImagesLoading ? 'Đang xử lý ảnh...' : 'Chọn ảnh chuyển tiền'}
+                </Button>
+                {paymentImages.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      Đã chọn {paymentImages.length} ảnh:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {paymentImages.map((file, idx) => (
+                        <Badge key={`${file.name}-${idx}`} variant="outline">
+                          {file.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                <p className="font-medium mb-1">Lưu ý:</p>
+                <p>Vui lòng upload ảnh chứng từ chuyển tiền để xác nhận. Hệ thống sẽ trừ tiền từ ví công ty sau khi xác nhận.</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsConfirmPaymentDialogOpen(false);
+                setVoucherToConfirm(null);
+                setPaymentImages([]);
+                setPaymentNote('');
+              }}
+              disabled={statusMutation.isPending}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleConfirmPayment}
+              disabled={statusMutation.isPending || paymentImages.length === 0}
+            >
+              {statusMutation.isPending ? 'Đang xử lý...' : 'Xác nhận chuyển tiền'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -297,7 +297,7 @@ export interface CustomerAdvanceStatusUpdateRequest {
 }
 
 export type DriverExpenseType = 'TOLL' | 'PARKING' | 'FUEL' | 'OTHER';
-export type DriverExpenseStatus = 'REQUESTED' | 'APPROVED' | 'DEDUCTED' | 'REJECTED';
+export type DriverExpenseStatus = 'REQUESTED' | 'APPROVED' | 'TRANSFERRED' | 'DEDUCTED' | 'REJECTED';
 
 export interface DriverExpenseAdvanceResponse {
   id: number;
@@ -333,7 +333,7 @@ export interface DriverExpenseAdvanceStatusUpdateRequest {
   rejectionReason?: string | null;
 }
 
-export type ExpenseVoucherStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ExpenseVoucherStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED';
 
 export type ExpenseVoucherCategory =
   | 'OFFICE_RENT'
@@ -367,6 +367,9 @@ export interface ExpenseVoucherResponse {
   approvedBy: number | null;
   approvedByName: string | null;
   approvedAt: string | null;
+  paidBy: number | null;
+  paidByName: string | null;
+  paidAt: string | null;
   rejectedBy: number | null;
   rejectedByName: string | null;
   rejectedAt: string | null;

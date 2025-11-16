@@ -31,6 +31,9 @@ public class ExpenseVoucherDTO {
     Long approvedBy;
     String approvedByName;
     String approvedAt;
+    Long paidBy;
+    String paidByName;
+    String paidAt;
     Long rejectedBy;
     String rejectedByName;
     String rejectedAt;

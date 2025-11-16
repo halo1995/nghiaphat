@@ -48,6 +48,13 @@ public class DriverExpenseAdvance {
     @Column(name = "approved_at")
     private Date approvedAt;
 
+    @Column(name = "transferred_by")
+    private Long transferredBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "transferred_at")
+    private Date transferredAt;
+
     @Column(name = "deducted_by")
     private Long deductedBy;
 
@@ -76,6 +83,6 @@ public class DriverExpenseAdvance {
     }
 
     public enum Status {
-        REQUESTED, APPROVED, DEDUCTED, REJECTED
+        REQUESTED, APPROVED, TRANSFERRED, DEDUCTED, REJECTED
     }
 }

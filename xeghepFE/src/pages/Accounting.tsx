@@ -100,6 +100,7 @@ const Accounting: React.FC = () => {
   const driverStatusLabels: Record<DriverExpenseStatus, string> = {
     requested: 'Chờ duyệt',
     approved: 'Đã duyệt',
+    transferred: 'Đã chuyển tiền',
     deducted: 'Đã khấu trừ',
     rejected: 'Từ chối',
   };
@@ -107,6 +108,7 @@ const Accounting: React.FC = () => {
   const driverStatusVariants: Record<DriverExpenseStatus, 'outline' | 'default' | 'secondary' | 'destructive'> = {
     requested: 'outline',
     approved: 'secondary',
+    transferred: 'secondary',
     deducted: 'default',
     rejected: 'destructive',
   };
