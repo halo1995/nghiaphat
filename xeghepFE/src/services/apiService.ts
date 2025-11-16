@@ -571,6 +571,24 @@ class ApiService {
     return this.handleResponse<ExpenseVoucherHistoryResponse[]>(response);
   }
 
+  async exportAccountingReport(from?: string, to?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    
+    const url = this.buildUrl(`/reports/accounting/export${params.toString() ? '?' + params.toString() : ''}`);
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Lỗi khi tải báo cáo' }));
+      throw new Error(error.message || 'Lỗi khi tải báo cáo');
+    }
+    
+    return response.blob();
+  }
+
   async getExpenseSummary(from?: string, to?: string): Promise<ExpenseSummaryResponse> {
     const params = new URLSearchParams();
     if (from) params.append('from', from);

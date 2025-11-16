@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
-import { Plus } from 'lucide-react';
+import { Plus, Download } from 'lucide-react';
+import { apiService } from '@/services/apiService';
 import {
   ExpenseVoucher,
   ExpenseVoucherList,
@@ -164,6 +165,10 @@ const ExpenseVouchersPage: React.FC = () => {
   const [paymentNote, setPaymentNote] = useState('');
   const paymentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentImagesLoading, setPaymentImagesLoading] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFromDate, setExportFromDate] = useState('');
+  const [exportToDate, setExportToDate] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
   const isAdmin = user?.role === 'ADMIN';
   const isAccountant = user?.role === 'ACCOUNTANT';
@@ -527,6 +532,46 @@ const ExpenseVouchersPage: React.FC = () => {
     }));
   };
 
+  const handleExportReport = async () => {
+    if (!exportFromDate || !exportToDate) {
+      toast({
+        title: 'Thiếu thông tin',
+        description: 'Vui lòng chọn khoảng thời gian',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const blob = await apiService.exportAccountingReport(exportFromDate, exportToDate);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bao-cao-thu-chi-${exportFromDate}-${exportToDate}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'Xuất báo cáo thành công',
+        description: 'File Excel đã được tải xuống',
+      });
+      setIsExportDialogOpen(false);
+      setExportFromDate('');
+      setExportToDate('');
+    } catch (error) {
+      toast({
+        title: 'Lỗi xuất báo cáo',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const vouchers = vouchersQuery.data?.items ?? [];
 
   const statusFilterValue = filters.status ?? 'ALL';
@@ -724,6 +769,17 @@ const ExpenseVouchersPage: React.FC = () => {
               <Button onClick={handleOpenCreate}>
                 <Plus className="mr-2 h-4 w-4" />
                 Tạo phiếu chi
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setExportFromDate(currentMonthRange.from);
+                  setExportToDate(currentMonthRange.to);
+                  setIsExportDialogOpen(true);
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Xuất báo cáo Excel
               </Button>
             </div>
           )}
@@ -1574,6 +1630,55 @@ const ExpenseVouchersPage: React.FC = () => {
               disabled={statusMutation.isPending || paymentImages.length === 0}
             >
               {statusMutation.isPending ? 'Đang xử lý...' : 'Xác nhận chuyển tiền'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xuất báo cáo thu chi công nợ</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Từ ngày *</label>
+              <DatePickerField
+                value={exportFromDate}
+                onChange={(value) => setExportFromDate(value || '')}
+                placeholder="Chọn ngày bắt đầu"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Đến ngày *</label>
+              <DatePickerField
+                value={exportToDate}
+                onChange={(value) => setExportToDate(value || '')}
+                placeholder="Chọn ngày kết thúc"
+              />
+            </div>
+            <div className="rounded-md border border-dashed border-blue-300 bg-blue-50 p-3 text-xs text-blue-800">
+              <p className="font-medium mb-1">Lưu ý:</p>
+              <p>Báo cáo sẽ bao gồm: Tổng quan, Chi tiết thu, Chi tiết chi, Công nợ khách hàng, Công nợ tài xế</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsExportDialogOpen(false);
+                setExportFromDate('');
+                setExportToDate('');
+              }}
+              disabled={isExporting}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleExportReport}
+              disabled={isExporting || !exportFromDate || !exportToDate}
+            >
+              {isExporting ? 'Đang xuất...' : 'Xuất báo cáo'}
             </Button>
           </DialogFooter>
         </DialogContent>
