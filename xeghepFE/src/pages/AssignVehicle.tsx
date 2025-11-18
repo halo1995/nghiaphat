@@ -213,6 +213,7 @@ const AssignVehicle = () => {
   }
 
   const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
+  const isFullVehicleGroup = groupTrips.some((trip) => trip.fullVehicle);
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const selectedDriver = drivers.find((d) => d.id === selectedDriverId);
 
@@ -243,8 +244,16 @@ const AssignVehicle = () => {
                   <p className="text-2xl font-bold text-blue-600">{group.tripIds.length}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Tổng hành khách</p>
-                  <p className="text-2xl font-bold text-purple-600">{group.totalPassengers}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {isFullVehicleGroup ? 'Hình thức' : 'Tổng hành khách'}
+                  </p>
+                  {isFullVehicleGroup ? (
+                    <p className="text-sm font-semibold text-green-700 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1">
+                      Thuê nguyên xe
+                    </p>
+                  ) : (
+                    <p className="text-2xl font-bold text-purple-600">{group.totalPassengers}</p>
+                  )}
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-1">Doanh thu</p>
@@ -264,6 +273,11 @@ const AssignVehicle = () => {
                         <p className="text-xs text-muted-foreground">
                           {trip.pickupLocation} → {trip.dropoffLocation}
                         </p>
+                        {trip.fullVehicle && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Thuê nguyên xe
+                          </span>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium text-gray-700">
@@ -272,9 +286,15 @@ const AssignVehicle = () => {
                             minute: '2-digit'
                           })}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {trip.passengers} người
-                        </p>
+                        {trip.fullVehicle ? (
+                          <span className="inline-flex items-center justify-end gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                            Thuê nguyên xe
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-end gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                            {trip.passengers} người
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

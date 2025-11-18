@@ -36,5 +36,6 @@ public interface CustomerAdvancePaymentRepository extends JpaRepository<Customer
             "from CustomerAdvancePayment c, Trip t " +
             "where c.tripId = t.id and t.driverId = :driverId and c.status = :status")
     Double sumAmountByDriverIdAndStatus(@Param("driverId") Long driverId, @Param("status") Status status);
-    
+
     List<CustomerAdvancePayment> findByCollectedAtBetween(Date from, Date to);
+}

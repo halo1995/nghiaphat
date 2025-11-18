@@ -193,6 +193,7 @@ export interface TripResponse {
   pickupConfirmed: boolean | null;
   dropoffConfirmed: boolean | null;
   groupId: string | null;
+  fullVehicle: boolean | null;
 }
 
 export interface TripRequest {
@@ -221,6 +222,7 @@ export interface TripRequest {
   pickupConfirmed?: boolean | null;
   dropoffConfirmed?: boolean | null;
   groupId?: string | null;
+  fullVehicle?: boolean | null;
 }
 
 export type PaymentMethod = 'CASH' | 'TRANSFER';

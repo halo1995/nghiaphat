@@ -186,7 +186,7 @@ const TripExecution = () => {
                         </p>
                         {!trip.pickupConfirmed && trip.status !== 'Đã phân xe' && (
                           <div className="flex gap-2">
-                            <a 
+                            {/* <a 
                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trip.pickupLocation)}`}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -195,7 +195,7 @@ const TripExecution = () => {
                                 <Navigation size={16} />
                                 Chỉ đường
                               </Button>
-                            </a>
+                            </a> */}
                             {trip.status === 'Đang đón' && (
                               <Button 
                                 onClick={handleConfirmPickup}
@@ -237,7 +237,7 @@ const TripExecution = () => {
                       </p>
                       {!trip.dropoffConfirmed && trip.pickupConfirmed && (
                         <div className="flex gap-2">
-                          <a 
+                          {/* <a 
                             href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trip.dropoffLocation)}`}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -246,7 +246,7 @@ const TripExecution = () => {
                               <Navigation size={16} />
                               Chỉ đường
                             </Button>
-                          </a>
+                          </a> */}
                           {trip.status === 'Đang đi' && (
                             <Button 
                               onClick={handleConfirmDropoff}

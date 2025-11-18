@@ -73,6 +73,7 @@ const GroupTrips = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState('none');
   const [selectedDriverId, setSelectedDriverId] = useState('none');
   const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'vehicleAssigned' | 'driverAssigned' | 'unassigned'>('all');
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -90,19 +91,6 @@ const GroupTrips = () => {
     return group.tripIds.some((tripId) => lockedTripIds.has(tripId));
   }, [lockedTripIds]);
 
-  const availableTrips = useMemo(() => {
-    if (!editingGroup) return [] as Trip[];
-    return trips.filter((trip: Trip) => {
-      if (trip.pickupConfirmed === true) {
-        return false;
-      }
-      if (trip.groupId === editingGroup.id) {
-        return true;
-      }
-      return !trip.groupId && !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
-    });
-  }, [editingGroup, trips]);
-
   const availableVehicles = useMemo<Vehicle[]>(() => vehicles, [vehicles]);
 
   const availableDrivers = useMemo(() => {
@@ -115,16 +103,49 @@ const GroupTrips = () => {
 
   const tripById = useMemo(() => new Map(trips.map((trip) => [trip.id, trip])), [trips]);
 
-  const filteredGroups = useMemo(() => {
-    if (!dateFilter) return groups;
+  const availableTrips = useMemo(() => {
+    if (!editingGroup) return [] as Trip[];
+    const groupHasFullVehicle = editingGroup.tripIds.some((id) => tripById.get(id)?.fullVehicle);
+    return trips.filter((trip: Trip) => {
+      if (trip.pickupConfirmed === true) {
+        return false;
+      }
+      if (trip.groupId === editingGroup.id) {
+        return true;
+      }
+      if (groupHasFullVehicle) {
+        return false;
+      }
+      return !trip.groupId && !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
+    });
+  }, [editingGroup, trips, tripById]);
+  const groupFullVehicleMap = useMemo(() =>
+    new Map(groups.map(group => [group.id, group.tripIds.some((tripId) => tripById.get(tripId)?.fullVehicle)])),
+  [groups, tripById]);
 
-    return groups.filter((group) =>
-      group.tripIds.some((tripId) => {
+  const filteredGroups = useMemo(() => {
+    return groups.filter((group) => {
+      const matchesDate = !dateFilter || group.tripIds.some((tripId) => {
         const trip = tripById.get(tripId);
         return trip?.pickupTime?.startsWith(dateFilter);
-      })
-    );
-  }, [groups, tripById, dateFilter]);
+      });
+
+      if (!matchesDate) {
+        return false;
+      }
+
+      switch (assignmentFilter) {
+        case 'vehicleAssigned':
+          return Boolean(group.vehicleId);
+        case 'driverAssigned':
+          return Boolean(group.driverId);
+        case 'unassigned':
+          return !group.vehicleId;
+        default:
+          return true;
+      }
+    });
+  }, [groups, tripById, dateFilter, assignmentFilter]);
 
   useEffect(() => {
     if (selectedVehicleId === 'none') {
@@ -342,6 +363,15 @@ const GroupTrips = () => {
       });
       return;
     }
+    const trip = tripById.get(tripId);
+    if (trip?.fullVehicle) {
+      toast({
+        title: 'Không thể loại bỏ',
+        description: 'Chuyến thuê nguyên xe không thể tách khỏi nhóm.',
+        variant: 'destructive',
+      });
+      return;
+    }
     removeTripMutation.mutate({ group, tripId });
   };
 
@@ -365,6 +395,15 @@ const GroupTrips = () => {
       toast({
         title: 'Không thể chỉnh sửa',
         description: 'Nhóm đã bị khoá vì tài xế đã xác nhận đón hành khách.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const trip = tripById.get(tripId);
+    if (trip?.fullVehicle) {
+      toast({
+        title: 'Không thể thay đổi',
+        description: 'Chuyến thuê nguyên xe không hỗ trợ ghép thêm hoặc tách khách.',
         variant: 'destructive',
       });
       return;
@@ -482,6 +521,19 @@ const GroupTrips = () => {
                   placeholder="Chọn ngày"
                 />
               </div>
+              <div className="w-full sm:w-64">
+                <Select value={assignmentFilter} onValueChange={(value) => setAssignmentFilter(value as typeof assignmentFilter)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Trạng thái phân xe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="vehicleAssigned">Đã phân xe</SelectItem>
+                    <SelectItem value="driverAssigned">Đã phân tài xế</SelectItem>
+                    <SelectItem value="unassigned">Chưa phân xe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
 
@@ -525,6 +577,7 @@ const GroupTrips = () => {
         const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
         const groupLocked = isGroupLocked(group);
         const canEditGroup = !groupLocked && group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
+        const isFullVehicleGroup = groupFullVehicleMap.get(group.id) === true;
                 
                 return (
                   <motion.div
@@ -535,7 +588,7 @@ const GroupTrips = () => {
                   >
                     <Card className="hover:shadow-xl transition-shadow">
                       <CardContent className="p-6">
-                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-start justify-between mb-4">
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-1">
                               {group.name}
@@ -543,6 +596,11 @@ const GroupTrips = () => {
                             <p className="text-sm text-muted-foreground">
                               Tạo lúc: {new Date(group.createdAt).toLocaleString('vi-VN')}
                             </p>
+                              {isFullVehicleGroup && (
+                                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                  Thuê nguyên xe
+                                </span>
+                              )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[group.status]}`}>
@@ -659,16 +717,23 @@ const GroupTrips = () => {
                                         minute: '2-digit'
                                       })}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {trip.passengers} người
-                                    </p>
+                                    {trip.fullVehicle ? (
+                                      <span className="mt-1 inline-flex items-center justify-end gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                                        Thuê nguyên xe
+                                      </span>
+                                    ) : (
+                                      <span className="mt-1 inline-flex items-center justify-end gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                                        {trip.passengers} người
+                                      </span>
+                                    )}
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="text-red-600 hover:text-red-700"
                                     onClick={() => handleRemoveTrip(group, trip.id)}
-                                    disabled={isRemovingTrip || groupLocked}
+                                    disabled={isRemovingTrip || groupLocked || trip.fullVehicle}
+                                    title={trip.fullVehicle ? 'Chuyến thuê nguyên xe không thể loại bỏ khỏi nhóm' : undefined}
                                   >
                                     Loại bỏ
                                   </Button>
@@ -730,17 +795,19 @@ const GroupTrips = () => {
                         const checked = selectedTripIds.includes(trip.id);
                         const statusLocked = ['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
                         const disabled = (!!trip.groupId && trip.groupId !== editingGroup.id) || statusLocked;
+                        const isFullVehicle = trip.fullVehicle;
+                        const preventChanges = isFullVehicle && trip.groupId === editingGroup?.id;
                         return (
                           <label
                             key={trip.id}
                             className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                               checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                            } ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                            } ${(disabled || preventChanges) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                           >
                             <Checkbox
                               checked={checked}
-                              onCheckedChange={() => !disabled && handleToggleTrip(trip.id)}
-                              disabled={disabled || isEditing || editingGroupLocked}
+                              onCheckedChange={() => !(disabled || preventChanges) && handleToggleTrip(trip.id)}
+                              disabled={disabled || isEditing || editingGroupLocked || preventChanges}
                               className="mt-1"
                             />
                             <div className="flex-1">
@@ -754,8 +821,13 @@ const GroupTrips = () => {
                                 {trip.pickupLocation} → {trip.dropoffLocation}
                               </p>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {new Date(trip.pickupTime).toLocaleString('vi-VN')} • {trip.passengers} người
+                                {new Date(trip.pickupTime).toLocaleString('vi-VN')} • {trip.fullVehicle ? 'Thuê nguyên xe' : `${trip.passengers} người`}
                               </p>
+                              {isFullVehicle && (
+                                <p className="text-xs text-green-600 mt-1 font-medium">
+                                  Thuê nguyên xe — không thể ghép thêm khách
+                                </p>
+                              )}
                               {statusLocked && (
                                 <p className="text-xs text-orange-600 mt-1">
                                   Không thể chỉnh sửa chuyến đang ở trạng thái {trip.status}

@@ -39,6 +39,7 @@ export interface Trip {
   pickupConfirmed?: boolean;
   dropoffConfirmed?: boolean;
   groupId?: string;
+  fullVehicle?: boolean;
 }
 
 export interface TripGroup {
@@ -131,6 +132,7 @@ const mapTripResponse = (trip: TripResponse): Trip => ({
   pickupConfirmed: trip.pickupConfirmed ?? undefined,
   dropoffConfirmed: trip.dropoffConfirmed ?? undefined,
   groupId: trip.groupId ?? undefined,
+  fullVehicle: trip.fullVehicle ?? undefined,
 });
 
 const mapTripGroupResponse = (group: TripGroupResponse): TripGroup => ({
@@ -174,6 +176,7 @@ type TripForRequest = {
   pickupConfirmed?: boolean;
   dropoffConfirmed?: boolean;
   groupId?: string;
+  fullVehicle?: boolean;
 };
 
 const buildTripRequest = (trip: TripForRequest, overrideStatus?: Trip['status']): TripRequest => {
@@ -206,6 +209,7 @@ const buildTripRequest = (trip: TripForRequest, overrideStatus?: Trip['status'])
     pickupConfirmed: typeof trip.pickupConfirmed === 'boolean' ? trip.pickupConfirmed : undefined,
     dropoffConfirmed: typeof trip.dropoffConfirmed === 'boolean' ? trip.dropoffConfirmed : undefined,
     groupId: trip.groupId ?? null,
+    fullVehicle: typeof trip.fullVehicle === 'boolean' ? trip.fullVehicle : undefined,
   };
 };
 

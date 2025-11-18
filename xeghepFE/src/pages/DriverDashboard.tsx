@@ -5,7 +5,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getTrips, type Trip } from '@/data/trips';
-import { Calendar, MapPin, Users, Clock, ArrowRight, CheckCircle, Wallet } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, ArrowRight, CheckCircle, Wallet, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
@@ -45,6 +45,7 @@ const DriverDashboard = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Đã phân xe' | 'Đang đón' | 'Đang đi' | 'Hoàn thành'>('all');
   const [driverAdvanceForm, setDriverAdvanceForm] = useState({
     amount: '',
     expenseType: 'toll' as DriverExpenseType,
@@ -58,13 +59,23 @@ const DriverDashboard = () => {
   const [financeDialogOpen, setFinanceDialogOpen] = useState(false);
   const driverId = user?.id ? user.id.toString() : '';
 
-  const { data: allTrips = [], isLoading } = useQuery({
+  const {
+    data: allTrips = [],
+    isLoading,
+    isFetching: isTripsFetching,
+    refetch: refetchTrips,
+  } = useQuery({
     queryKey: ['trips'],
     queryFn: getTrips,
     enabled: isAuthenticated && !authLoading,
   });
 
-  const driverAdvancesQ = useQuery({
+  const {
+    data: driverAdvancesData = [],
+    isLoading: driverAdvancesLoading,
+    isFetching: isAdvancesFetching,
+    refetch: refetchDriverAdvances,
+  } = useQuery({
     queryKey: ['driver-expense-advances', driverId],
     queryFn: () => getDriverExpenseAdvances({ driverId }),
     enabled: isAuthenticated && !authLoading && !!driverId,
@@ -111,8 +122,12 @@ const DriverDashboard = () => {
     trip.pickupTime.startsWith(selectedDate)
   );
 
+  const filteredTrips = statusFilter === 'all'
+    ? myTrips
+    : myTrips.filter(trip => trip.status === statusFilter);
+
   // Sort by pickup time
-  const sortedTrips = [...myTrips].sort((a, b) => 
+  const sortedTrips = [...filteredTrips].sort((a, b) => 
     new Date(a.pickupTime).getTime() - new Date(b.pickupTime).getTime()
   );
 
@@ -123,7 +138,7 @@ const DriverDashboard = () => {
     upcoming: myTrips.filter(t => t.status === 'Đã phân xe').length,
   };
 
-  const driverAdvances = driverAdvancesQ.data ?? [];
+  const driverAdvances = driverAdvancesData ?? [];
   const outstandingAdvance = useMemo(
     () => driverAdvances
       .filter((advance) => advance.status === 'approved')
@@ -174,6 +189,20 @@ const DriverDashboard = () => {
     'Đang đi': 'bg-green-100 text-green-700 border-green-200',
     'Hoàn thành': 'bg-gray-100 text-gray-700 border-gray-200',
   };
+
+  const isReloading = isTripsFetching || isAdvancesFetching;
+
+  const handleReloadData = () => {
+    Promise.allSettled([refetchTrips(), refetchDriverAdvances()]);
+  };
+
+  const statusFilterOptions: Array<{ value: typeof statusFilter; label: string }> = [
+    { value: 'all', label: 'Tất cả trạng thái' },
+    { value: 'Đã phân xe', label: 'Đã phân xe' },
+    { value: 'Đang đón', label: 'Đang đón' },
+    { value: 'Đang đi', label: 'Đang đi' },
+    { value: 'Hoàn thành', label: 'Hoàn thành' },
+  ];
 
   if (authLoading) {
     return (
@@ -246,19 +275,50 @@ const DriverDashboard = () => {
           {/* Date Filter */}
           <Card>
             <CardContent className="p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Calendar className="text-gray-600" size={20} />
-                  <div className="w-full max-w-xs">
-                  <DatePickerField
-                    value={selectedDate}
-                    onChange={setSelectedDate}
-                  />
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Calendar className="text-gray-600" size={20} />
+                    <div className="w-full max-w-xs">
+                      <DatePickerField
+                        value={selectedDate}
+                        onChange={setSelectedDate}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <Label className="text-xs font-medium text-muted-foreground sm:text-sm" htmlFor="status-filter">
+                      Trạng thái
+                    </Label>
+                    <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+                      <SelectTrigger id="status-filter" className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusFilterOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground sm:text-sm">
-                  Hiển thị {sortedTrips.length} chuyến trong ngày
-                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <p className="text-xs text-muted-foreground sm:text-sm">
+                    Hiển thị {sortedTrips.length} chuyến trong ngày
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleReloadData}
+                    disabled={isReloading}
+                    className="gap-2"
+                  >
+                    <RotateCcw className={`h-4 w-4 ${isReloading ? 'animate-spin' : ''}`} />
+                    Tải lại dữ liệu
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -269,7 +329,7 @@ const DriverDashboard = () => {
                 <h2 className="text-lg font-semibold text-gray-900">Lịch sử tạm ứng của tôi</h2>
                 <p className="text-sm text-muted-foreground">Theo dõi trạng thái phê duyệt và khấu trừ</p>
               </div>
-              {driverAdvancesQ.isLoading ? (
+              {driverAdvancesLoading ? (
                 <div className="p-6 text-center text-muted-foreground">Đang tải danh sách tạm ứng...</div>
               ) : driverAdvances.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground">Bạn chưa có yêu cầu tạm ứng nào</div>
@@ -457,13 +517,17 @@ const DriverDashboard = () => {
 
                         <div className="flex flex-col gap-4 border-t pt-4 md:flex-row md:items-center md:justify-between">
                           <div className="flex flex-col gap-2 text-xs text-muted-foreground md:flex-row md:flex-wrap md:items-center md:gap-4 md:text-sm">
-                            <div className="flex items-center gap-1">
-                              <Users size={16} />
-                              <span>{trip.passengers} người</span>
-                              <span className="mx-1 hidden text-gray-300 md:inline">•</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span>📏 {trip.distance} km</span>
+                            <div className="flex items-center gap-2">
+                              {trip.fullVehicle ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 md:text-sm">
+                                  Thuê nguyên xe
+                                </span>
+                              ) : (
+                                <>
+                                  <Users size={16} />
+                                  <span>{trip.passengers} người</span>
+                                </>
+                              )}
                             </div>
                             <div className="flex flex-col gap-0.5 md:flex-row md:items-center md:gap-2">
                               <span className="font-semibold text-gray-800">{trip.customerName}</span>

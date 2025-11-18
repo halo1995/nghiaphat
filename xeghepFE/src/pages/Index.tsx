@@ -112,6 +112,8 @@ const Index = () => {
       .slice(0, 4);
   }, [tripGroups]);
 
+  const tripsById = useMemo(() => new Map(trips.map((trip) => [trip.id, trip])), [trips]);
+
   const loading = vehiclesLoading || driversLoading || tripsLoading || groupsLoading;
   const ready = !loading;
 
@@ -321,7 +323,7 @@ const Index = () => {
                           </p>
                         </div>
                         <div className="text-right text-xs text-muted-foreground">
-                          <p>{trip.passengers} hành khách</p>
+                          <p>{trip.fullVehicle ? 'Thuê nguyên xe' : `${trip.passengers} hành khách`}</p>
                           <p>{trip.driverName ?? 'Chưa phân tài xế'}</p>
                         </div>
                       </li>
@@ -352,7 +354,9 @@ const Index = () => {
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {group.totalPassengers} khách • {formatCurrency(group.totalRevenue)}
+                          {group.tripIds.some((id) => tripsById.get(id)?.fullVehicle)
+                            ? 'Thuê nguyên xe'
+                            : `${group.totalPassengers} khách`} • {formatCurrency(group.totalRevenue)}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           Tạo lúc {formatDateTime(group.createdAt)}

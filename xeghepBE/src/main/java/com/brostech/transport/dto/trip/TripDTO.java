@@ -41,4 +41,5 @@ public class TripDTO {
     private Double customerAdvanceReconciled;
     private Double customerAdvancePending;
     private Double customerOutstandingAmount;
+    private Boolean fullVehicle;
 }

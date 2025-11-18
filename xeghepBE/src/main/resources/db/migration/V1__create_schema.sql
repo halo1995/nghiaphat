@@ -99,7 +99,8 @@ CREATE TABLE trips (
     completed_at TIMESTAMP,
     pickup_confirmed BOOLEAN DEFAULT FALSE,
     dropoff_confirmed BOOLEAN DEFAULT FALSE,
-    group_id VARCHAR(64)
+    group_id VARCHAR(64),
+    full_vehicle BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- Create trip groups table

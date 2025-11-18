@@ -6,9 +6,11 @@ import com.brostech.transport.dto.trip.TripRequest;
 import com.brostech.transport.jpa.entity.Customer;
 import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.Trip;
+import com.brostech.transport.jpa.entity.TripGroup;
 import com.brostech.transport.jpa.entity.TripPayment;
 import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.jpa.repository.CustomerRepository;
+import com.brostech.transport.jpa.repository.TripGroupRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
@@ -50,6 +52,7 @@ public class TripServiceImpl implements TripService {
     private final TripPaymentRepository tripPaymentRepository;
     private final PaymentService paymentService;
     private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
+    private final TripGroupRepository tripGroupRepository;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -100,6 +103,7 @@ public class TripServiceImpl implements TripService {
                 .passengers(req.getPassengers())
                 .notes(req.getNotes())
                 .status(req.getStatus() != null ? req.getStatus() : Trip.TripStatus.CHO_XAC_NHAN)
+                .fullVehicle(Boolean.TRUE.equals(req.getFullVehicle()))
                 .build();
         trip.setAssignedAt(parseDate(req.getAssignedAt()));
         trip.setStartedAt(parseDate(req.getStartedAt()));
@@ -113,7 +117,9 @@ public class TripServiceImpl implements TripService {
         if (req.getGroupId() != null) {
             trip.setGroupId(req.getGroupId());
         }
+        trip.setStatus(normalizeStatusForFullVehicle(trip, trip.getStatus()));
         trip = tripRepository.save(trip);
+        trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, null);
         return toDTO(trip);
     }
@@ -176,6 +182,9 @@ public class TripServiceImpl implements TripService {
     public TripDTO update(Long id, TripRequest req) {
         Trip trip = tripRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+        if (trip.getStatus() == Trip.TripStatus.DA_HUY) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa chuyến đã hủy");
+        }
         Customer customer = resolveCustomerForUpdate(trip, req);
         String customerName = StringUtils.hasText(req.getCustomerName())
                 ? req.getCustomerName().trim()
@@ -223,11 +232,15 @@ public class TripServiceImpl implements TripService {
         if (req.getGroupId() != null) {
             trip.setGroupId(req.getGroupId());
         }
+        if (req.getFullVehicle() != null) {
+            trip.setFullVehicle(req.getFullVehicle());
+        }
         Trip.TripStatus previousStatus = trip.getStatus();
         if (req.getStatus() != null) {
-            trip.setStatus(req.getStatus());
+            trip.setStatus(normalizeStatusForFullVehicle(trip, req.getStatus()));
         }
         trip = tripRepository.save(trip);
+        trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, previousStatus);
         return toDTO(trip);
     }
@@ -338,6 +351,7 @@ public class TripServiceImpl implements TripService {
                 .pickupConfirmed(trip.getPickupConfirmed())
                 .dropoffConfirmed(trip.getDropoffConfirmed())
                 .groupId(trip.getGroupId())
+                .fullVehicle(trip.getFullVehicle())
                 .customerAdvanceReconciled(reconciled)
                 .customerAdvancePending(pending)
                 .customerOutstandingAmount(outstanding)
@@ -351,6 +365,50 @@ public class TripServiceImpl implements TripService {
 
     private double safeSum(Double value) {
         return value != null ? value : 0d;
+    }
+
+    private Trip.TripStatus normalizeStatusForFullVehicle(Trip trip, Trip.TripStatus requestedStatus) {
+        if (requestedStatus == Trip.TripStatus.DA_XAC_NHAN && Boolean.TRUE.equals(trip.getFullVehicle())) {
+            return Trip.TripStatus.DA_GHEP_CHUYEN;
+        }
+        return requestedStatus != null ? requestedStatus : trip.getStatus();
+    }
+
+    private Trip ensureTripGroupForFullVehicle(Trip trip) {
+        if (trip == null || trip.getId() == null) {
+            return trip;
+        }
+        boolean isFullVehicle = Boolean.TRUE.equals(trip.getFullVehicle());
+        boolean isGroupedStatus = trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN;
+        boolean alreadyGrouped = StringUtils.hasText(trip.getGroupId());
+        if (!isFullVehicle || !isGroupedStatus || alreadyGrouped) {
+            return trip;
+        }
+
+        TripGroup group = TripGroup.builder()
+                .name(buildFullVehicleGroupName(trip))
+                .tripIds(trip.getId().toString())
+                .vehicleId(trip.getVehicleId())
+                .vehicleName(trip.getVehicleName())
+                .driverId(trip.getDriverId())
+                .driverName(trip.getDriverName())
+                .status(TripGroup.GroupStatus.DANG_GHEP)
+                .totalPassengers(trip.getPassengers())
+                .totalRevenue(trip.getPrice() != null ? trip.getPrice().doubleValue() : null)
+                .build();
+        group = tripGroupRepository.save(group);
+        trip.setGroupId(group.getId().toString());
+        return tripRepository.save(trip);
+    }
+
+    private String buildFullVehicleGroupName(Trip trip) {
+        StringBuilder name = new StringBuilder("Bao xe");
+        if (trip.getCustomerName() != null) {
+            name.append(" - ").append(trip.getCustomerName());
+        } else if (trip.getId() != null) {
+            name.append(" #").append(trip.getId());
+        }
+        return name.toString();
     }
 
     private void autoRecordDriverCollection(Trip trip, Trip.TripStatus previousStatus) {

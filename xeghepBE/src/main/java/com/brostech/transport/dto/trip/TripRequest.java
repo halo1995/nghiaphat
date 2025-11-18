@@ -57,4 +57,5 @@ public class TripRequest {
     private Boolean pickupConfirmed;
     private Boolean dropoffConfirmed;
     private String groupId;
+    private Boolean fullVehicle;
 }

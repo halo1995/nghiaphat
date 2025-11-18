@@ -96,6 +96,7 @@ public class TripGroupServiceImpl implements TripGroupService {
         assertGroupEditable(group);
         if (req.getTripIds() != null) {
             assertTripIdsEditable(req.getTripIds());
+            enforceFullVehicleRule(req.getTripIds());
         }
 
         group.setName(req.getName());
@@ -166,6 +167,14 @@ public class TripGroupServiceImpl implements TripGroupService {
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
 
+        if (Boolean.TRUE.equals(trip.getFullVehicle())) {
+            if (hasTrips(group)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+            }
+        } else if (groupContainsFullVehicle(group)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+        }
+
         if (Boolean.TRUE.equals(trip.getPickupConfirmed())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
         }
@@ -194,6 +203,10 @@ public class TripGroupServiceImpl implements TripGroupService {
         
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+
+        if (Boolean.TRUE.equals(trip.getFullVehicle())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tách chuyến thuê nguyên xe khỏi nhóm");
+        }
         
         String currentTripIds = group.getTripIds();
         if (currentTripIds != null && !currentTripIds.trim().isEmpty()) {
@@ -260,6 +273,35 @@ public class TripGroupServiceImpl implements TripGroupService {
         if (locked) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
         }
+    }
+
+    private void enforceFullVehicleRule(String tripIds) {
+        List<Long> ids = parseTripIds(tripIds);
+        if (ids.isEmpty()) {
+            return;
+        }
+        List<Trip> trips = tripRepository.findAllById(ids);
+        long fullVehicleCount = trips.stream()
+                .filter(trip -> Boolean.TRUE.equals(trip.getFullVehicle()))
+                .count();
+        if (fullVehicleCount > 0 && trips.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+        }
+    }
+
+    private boolean hasTrips(TripGroup group) {
+        return group.getTripIds() != null && !group.getTripIds().trim().isEmpty();
+    }
+
+    private boolean groupContainsFullVehicle(TripGroup group) {
+        if (!hasTrips(group)) {
+            return false;
+        }
+        List<Long> ids = parseTripIds(group.getTripIds());
+        if (ids.isEmpty()) {
+            return false;
+        }
+        return tripRepository.findAllById(ids).stream().anyMatch(trip -> Boolean.TRUE.equals(trip.getFullVehicle()));
     }
 
     private List<Long> parseTripIds(String tripIds) {

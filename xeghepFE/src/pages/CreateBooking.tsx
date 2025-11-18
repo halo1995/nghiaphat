@@ -17,6 +17,7 @@ import { getProvinces, getWards, formatFullAddress, AddressSelection } from '@/d
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type BookingFormData = {
   customerName: string;
@@ -32,7 +33,10 @@ type BookingFormData = {
   price: number;
   passengers: number;
   notes: string;
+  fullVehicle: boolean;
 };
+
+const FULL_VEHICLE_PRICE = 550000;
 
 const CreateBooking = () => {
   const navigate = useNavigate();
@@ -54,7 +58,9 @@ const CreateBooking = () => {
     price: 200000,
     passengers: 1,
     notes: '',
+    fullVehicle: false,
   });
+  const [previousPrice, setPreviousPrice] = useState<number>(200000);
   const [pickupSelection, setPickupSelection] = useState<AddressSelection>({});
   const [dropoffSelection, setDropoffSelection] = useState<AddressSelection>({});
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
@@ -89,6 +95,7 @@ const CreateBooking = () => {
         price: data.price,
         passengers: data.passengers,
         notes: data.notes,
+        fullVehicle: data.fullVehicle,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
@@ -165,7 +172,30 @@ const CreateBooking = () => {
   };
 
   const handleChange = <K extends keyof BookingFormData>(field: K, value: BookingFormData[K]) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      if (field === 'price' && typeof value === 'number' && !prev.fullVehicle) {
+        setPreviousPrice(value);
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleToggleFullVehicle = (checked: boolean) => {
+    setFormData(prev => {
+      if (checked) {
+        setPreviousPrice(prev.fullVehicle ? previousPrice : prev.price);
+        return {
+          ...prev,
+          fullVehicle: true,
+          price: FULL_VEHICLE_PRICE,
+        };
+      }
+      return {
+        ...prev,
+        fullVehicle: false,
+        price: previousPrice > 0 ? previousPrice : 200000,
+      };
+    });
   };
 
   const handlePickupProvinceChange = (provinceCode: string) => {
@@ -337,22 +367,43 @@ const CreateBooking = () => {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="passengers">Số hành khách *</Label>
-                      <Input
-                        id="passengers"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={formData.passengers}
-                        onChange={(e) =>
-                          handleChange(
-                            'passengers',
-                            Number.isNaN(parseInt(e.target.value, 10)) ? 1 : Math.max(1, parseInt(e.target.value, 10))
-                          )
-                        }
-                        required
-                      />
+                    {!formData.fullVehicle && (
+                      <div className="space-y-2 rounded-lg border-2 border-sky-400 bg-sky-50 p-3">
+                        <Label htmlFor="passengers" className="text-sky-700 font-semibold">
+                          Số hành khách *
+                        </Label>
+                        <Input
+                          id="passengers"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={formData.passengers}
+                          onChange={(e) =>
+                            handleChange(
+                              'passengers',
+                              Number.isNaN(parseInt(e.target.value, 10)) ? 1 : Math.max(1, parseInt(e.target.value, 10))
+                            )
+                          }
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div className="md:col-span-2">
+                      <div className={`flex items-start gap-3 rounded-lg border ${formData.fullVehicle ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'} p-3`}>
+                        <Checkbox
+                          id="fullVehicle"
+                          checked={formData.fullVehicle}
+                          onCheckedChange={(value) => handleToggleFullVehicle(value === true)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <Label htmlFor="fullVehicle" className={`font-semibold ${formData.fullVehicle ? 'text-green-700' : 'text-gray-800'}`}>
+                            Thuê nguyên xe
+                          </Label>
+                        
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -508,7 +559,9 @@ const CreateBooking = () => {
                           type="number"
                           min="0"
                           value={formData.price}
-                        onChange={(e) => handleChange('price', Number.isNaN(parseInt(e.target.value, 10)) ? 0 : parseInt(e.target.value, 10))}
+                          onChange={(e) =>
+                            handleChange('price', Number.isNaN(parseInt(e.target.value, 10)) ? 0 : parseInt(e.target.value, 10))
+                          }
                           required
                         />
                       </div>

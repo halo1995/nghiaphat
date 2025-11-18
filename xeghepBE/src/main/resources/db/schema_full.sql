@@ -99,6 +99,7 @@ CREATE TABLE trips (
     pickup_confirmed    BOOLEAN,
     dropoff_confirmed   BOOLEAN,
     group_id            VARCHAR(64),
+    full_vehicle        BOOLEAN NOT NULL DEFAULT FALSE,
     customer_advance_reconciled   NUMERIC(15,2) DEFAULT 0,
     customer_advance_pending      NUMERIC(15,2) DEFAULT 0,
     customer_outstanding_amount   NUMERIC(15,2) DEFAULT 0,

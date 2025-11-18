@@ -1,0 +1,6 @@
+ALTER TABLE trips
+    ADD COLUMN IF NOT EXISTS full_vehicle BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE trips
+SET full_vehicle = FALSE
+WHERE full_vehicle IS NULL;

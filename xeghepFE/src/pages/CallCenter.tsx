@@ -339,7 +339,7 @@ const CallCenter = () => {
   };
 
   const handleOpenSchedule = (trip: Trip) => {
-    if (['Đang đón', 'Đang đi', 'Hoàn thành'].includes(trip.status)) {
+    if (['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status)) {
       return;
     }
 
@@ -536,7 +536,7 @@ const CallCenter = () => {
     );
   }
 
-  
+
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -619,170 +619,170 @@ const CallCenter = () => {
                     <div>Giá cước: {formatCurrency(selectedTripForAdvance.price)}</div>
                   </div>
                 )}
-                  <form
-                    className="space-y-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const amount = Number(customerAdvanceForm.amount || 0);
-                      if (!customerAdvanceForm.customerName.trim() || !customerAdvanceForm.customerPhone.trim() || !amount || amount <= 0) {
-                        toast({
-                          title: 'Thiếu thông tin',
-                          description: 'Vui lòng nhập tên khách, số điện thoại và số tiền hợp lệ',
-                          variant: 'destructive',
-                        });
-                        return;
-                      }
-                      customerAdvanceMutation.mutate({
-                        tripId: customerAdvanceForm.tripId.trim() || undefined,
-                        customerName: customerAdvanceForm.customerName.trim(),
-                        customerPhone: customerAdvanceForm.customerPhone.trim(),
-                        amount,
-                        method: customerAdvanceForm.method,
-                        collectedBy: user?.id ? user.id.toString() : undefined,
-                        receiptCode: customerAdvanceForm.receiptCode.trim() || undefined,
-                        note: customerAdvanceForm.note.trim() || undefined,
-                        attachments: customerAdvanceImages,
+                <form
+                  className="space-y-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const amount = Number(customerAdvanceForm.amount || 0);
+                    if (!customerAdvanceForm.customerName.trim() || !customerAdvanceForm.customerPhone.trim() || !amount || amount <= 0) {
+                      toast({
+                        title: 'Thiếu thông tin',
+                        description: 'Vui lòng nhập tên khách, số điện thoại và số tiền hợp lệ',
+                        variant: 'destructive',
                       });
-                    }}
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="finance-advance-trip">Mã chuyến (nếu có)</Label>
-                        <Input
-                          id="finance-advance-trip"
-                          placeholder="VD: 142"
-                          value={customerAdvanceForm.tripId}
-                          disabled={isAdvanceLocked}
-                          onChange={(event) => {
-                            if (isAdvanceLocked) return;
-                            setCustomerAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }));
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="finance-advance-amount">Số tiền (₫) *</Label>
-                        <Input
-                          id="finance-advance-amount"
-                          type="number"
-                          min={0}
-                          placeholder="VD: 500000"
-                          value={customerAdvanceForm.amount}
-                          onChange={(event) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="finance-advance-customer">Tên khách *</Label>
-                        <Input
-                          id="finance-advance-customer"
-                          value={customerAdvanceForm.customerName}
-                          disabled={isAdvanceLocked}
-                          onChange={(event) => {
-                            if (isAdvanceLocked) return;
-                            setCustomerAdvanceForm((prev) => ({ ...prev, customerName: event.target.value }));
-                          }}
-                          placeholder="Ví dụ: Nguyễn Văn A"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="finance-advance-phone">Số điện thoại *</Label>
-                        <Input
-                          id="finance-advance-phone"
-                          value={customerAdvanceForm.customerPhone}
-                          disabled={isAdvanceLocked}
-                          onChange={(event) => {
-                            if (isAdvanceLocked) return;
-                            setCustomerAdvanceForm((prev) => ({ ...prev, customerPhone: event.target.value }));
-                          }}
-                          placeholder="0987654321"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Hình thức</Label>
-                        <Select
-                          value={customerAdvanceForm.method}
-                          onValueChange={(value) =>
-                            setCustomerAdvanceForm((prev) => ({ ...prev, method: value as CustomerAdvanceMethod }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="cash">Tiền mặt</SelectItem>
-                            <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="finance-advance-receipt">Mã phiếu/biên lai</Label>
-                        <Input
-                          id="finance-advance-receipt"
-                          value={customerAdvanceForm.receiptCode}
-                          disabled={isAdvanceLocked}
-                          onChange={(event) => {
-                            if (isAdvanceLocked) return;
-                            setCustomerAdvanceForm((prev) => ({ ...prev, receiptCode: event.target.value }));
-                          }}
-                          placeholder="Mã nội bộ hoặc biên lai"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Ảnh chứng từ</Label>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={customerAdvanceImagesLoading}
-                          onClick={() => customerAdvanceFileInputRef.current?.click()}
-                        >
-                          {customerAdvanceImages.length
-                            ? `Thay ảnh (${customerAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
-                            : 'Đính kèm ảnh (tối đa 3)'}
-                        </Button>
-                        {customerAdvanceImages.length > 0 && (
-                          <Button type="button" variant="ghost" onClick={() => setCustomerAdvanceImages([])}>
-                            Xóa ảnh
-                          </Button>
-                        )}
-                        {customerAdvanceImagesLoading && (
-                          <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
-                        )}
-                      </div>
-                      {customerAdvanceImages.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {customerAdvanceImages.map((file, idx) => (
-                            <Badge key={`advance-img-${idx}`} variant="outline">
-                              {file.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      return;
+                    }
+                    customerAdvanceMutation.mutate({
+                      tripId: customerAdvanceForm.tripId.trim() || undefined,
+                      customerName: customerAdvanceForm.customerName.trim(),
+                      customerPhone: customerAdvanceForm.customerPhone.trim(),
+                      amount,
+                      method: customerAdvanceForm.method,
+                      collectedBy: user?.id ? user.id.toString() : undefined,
+                      receiptCode: customerAdvanceForm.receiptCode.trim() || undefined,
+                      note: customerAdvanceForm.note.trim() || undefined,
+                      attachments: customerAdvanceImages,
+                    });
+                  }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="finance-advance-trip">Mã chuyến (nếu có)</Label>
+                      <Input
+                        id="finance-advance-trip"
+                        placeholder="VD: 142"
+                        value={customerAdvanceForm.tripId}
+                        disabled={isAdvanceLocked}
+                        onChange={(event) => {
+                          if (isAdvanceLocked) return;
+                          setCustomerAdvanceForm((prev) => ({ ...prev, tripId: event.target.value }));
+                        }}
+                      />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="finance-advance-note">Ghi chú</Label>
-                      <Textarea
-                        id="finance-advance-note"
-                        rows={3}
-                        placeholder="Thông tin bổ sung cho kế toán"
-                        value={customerAdvanceForm.note}
+                      <Label htmlFor="finance-advance-amount">Số tiền (₫) *</Label>
+                      <Input
+                        id="finance-advance-amount"
+                        type="number"
+                        min={0}
+                        placeholder="VD: 500000"
+                        value={customerAdvanceForm.amount}
                         onChange={(event) =>
-                          setCustomerAdvanceForm((prev) => ({ ...prev, note: event.target.value }))
+                          setCustomerAdvanceForm((prev) => ({ ...prev, amount: event.target.value }))
                         }
                       />
                     </div>
-                    <div className="flex justify-end">
-                      <Button
-                        type="submit"
-                        disabled={customerAdvanceMutation.isPending || customerAdvanceImagesLoading}
-                        className="min-w-32"
-                      >
-                        {customerAdvanceMutation.isPending ? 'Đang lưu...' : 'Ghi nhận'}
-                      </Button>
+                    <div className="space-y-1">
+                      <Label htmlFor="finance-advance-customer">Tên khách *</Label>
+                      <Input
+                        id="finance-advance-customer"
+                        value={customerAdvanceForm.customerName}
+                        disabled={isAdvanceLocked}
+                        onChange={(event) => {
+                          if (isAdvanceLocked) return;
+                          setCustomerAdvanceForm((prev) => ({ ...prev, customerName: event.target.value }));
+                        }}
+                        placeholder="Ví dụ: Nguyễn Văn A"
+                      />
                     </div>
-                  </form>
+                    <div className="space-y-1">
+                      <Label htmlFor="finance-advance-phone">Số điện thoại *</Label>
+                      <Input
+                        id="finance-advance-phone"
+                        value={customerAdvanceForm.customerPhone}
+                        disabled={isAdvanceLocked}
+                        onChange={(event) => {
+                          if (isAdvanceLocked) return;
+                          setCustomerAdvanceForm((prev) => ({ ...prev, customerPhone: event.target.value }));
+                        }}
+                        placeholder="0987654321"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Hình thức</Label>
+                      <Select
+                        value={customerAdvanceForm.method}
+                        onValueChange={(value) =>
+                          setCustomerAdvanceForm((prev) => ({ ...prev, method: value as CustomerAdvanceMethod }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Tiền mặt</SelectItem>
+                          <SelectItem value="transfer">Chuyển khoản</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="finance-advance-receipt">Mã phiếu/biên lai</Label>
+                      <Input
+                        id="finance-advance-receipt"
+                        value={customerAdvanceForm.receiptCode}
+                        disabled={isAdvanceLocked}
+                        onChange={(event) => {
+                          if (isAdvanceLocked) return;
+                          setCustomerAdvanceForm((prev) => ({ ...prev, receiptCode: event.target.value }));
+                        }}
+                        placeholder="Mã nội bộ hoặc biên lai"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ảnh chứng từ</Label>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={customerAdvanceImagesLoading}
+                        onClick={() => customerAdvanceFileInputRef.current?.click()}
+                      >
+                        {customerAdvanceImages.length
+                          ? `Thay ảnh (${customerAdvanceImages.length}/${MAX_VOUCHER_IMAGES})`
+                          : 'Đính kèm ảnh (tối đa 3)'}
+                      </Button>
+                      {customerAdvanceImages.length > 0 && (
+                        <Button type="button" variant="ghost" onClick={() => setCustomerAdvanceImages([])}>
+                          Xóa ảnh
+                        </Button>
+                      )}
+                      {customerAdvanceImagesLoading && (
+                        <span className="text-xs text-muted-foreground">Đang xử lý ảnh...</span>
+                      )}
+                    </div>
+                    {customerAdvanceImages.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {customerAdvanceImages.map((file, idx) => (
+                          <Badge key={`advance-img-${idx}`} variant="outline">
+                            {file.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="finance-advance-note">Ghi chú</Label>
+                    <Textarea
+                      id="finance-advance-note"
+                      rows={3}
+                      placeholder="Thông tin bổ sung cho kế toán"
+                      value={customerAdvanceForm.note}
+                      onChange={(event) =>
+                        setCustomerAdvanceForm((prev) => ({ ...prev, note: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      disabled={customerAdvanceMutation.isPending || customerAdvanceImagesLoading}
+                      className="min-w-32"
+                    >
+                      {customerAdvanceMutation.isPending ? 'Đang lưu...' : 'Ghi nhận'}
+                    </Button>
+                  </div>
+                </form>
               </DialogContent>
             </Dialog>
           )}
@@ -882,7 +882,7 @@ const CallCenter = () => {
                 const outstandingAmount = trip.customerOutstandingAmount ?? Math.max(trip.price - totalReconciled, 0);
                 const hasAwaitingReconcile = totalPending > 0;
 
-                const isEditable = !['Đang đón', 'Đang đi', 'Hoàn thành'].includes(trip.status);
+                const isEditable = !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
 
                 return (
                   <motion.div
@@ -930,11 +930,16 @@ const CallCenter = () => {
                                 <CalendarIcon size={14} />
                                 {new Date(trip.pickupTime).toLocaleString('vi-VN')}
                               </span>
-                              <span className="flex items-center gap-1">
-                                <Users size={14} />
-                                {trip.passengers} người
-                              </span>
-                              <span>📏 {trip.distance} km</span>
+                              {trip.fullVehicle ? (
+                                <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                  Bao xe
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1">
+                                  <Users size={14} />
+                                  {trip.passengers} người
+                                </span>
+                              )}
                             </div>
 
                             {advancesForTrip.length > 0 ? (
@@ -1046,7 +1051,7 @@ const CallCenter = () => {
                                 onClick={() => {
                                   setSelectedTripForAdvance(trip);
                                   setCustomerAdvanceForm({
-                    tripId: String(trip.id ?? ''),
+                                    tripId: String(trip.id ?? ''),
                                     customerName: trip.customerName,
                                     customerPhone: trip.customerPhone,
                                     amount: '',
@@ -1104,7 +1109,7 @@ const CallCenter = () => {
                                 disabled={!isEditable}
                                 title={
                                   !isEditable
-                                    ? 'Không thể chỉnh sửa khi chuyến đang đón, đang đi hoặc đã hoàn thành'
+                                    ? 'Không thể chỉnh sửa khi chuyến đang đón, đang đi, đã hoàn thành hoặc đã hủy'
                                     : undefined
                                 }
                               >
