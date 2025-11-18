@@ -1,15 +1,19 @@
+version: '3.9'
+
 services:
   backend:
     build:
       context: ./xeghepBE
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
-      POSTGRES_URL: jdbc:postgresql://db:5432/postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
       LOGGING_FILE_PATH: /app/logs
+      SERVER_PORT: 8080
+      JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
     depends_on:
       - db
     networks:
@@ -18,51 +22,133 @@ services:
       - backend_logs:/app/logs
       - ticket_images:/app/data/ticket-images
     restart: unless-stopped
-    mem_limit: 1024m     # NOTE: Thay cho deploy.resources.memory
-    cpus: 1           # NOTE: Thay cho deploy.resources.cpus
- 
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 4G
+
   frontend:
     build:
       context: ./xeghepFE
       dockerfile: Dockerfile
-    ports:
-      - "3000:80"       # NOTE: Nếu FE chạy bằng React dev server thì đổi thành "3000:3000"
-    depends_on:
-      - backend
     networks:
       - app-network
     restart: unless-stopped
-    mem_limit: 512m
-    cpus: 0.5
- 
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
-    ports:
-      - "5433:5432"
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init:/docker-entrypoint-initdb.d
+      - ./init:/docker-entrypoint-initdb.d:ro
     networks:
       - app-network
     restart: unless-stopped
-    mem_limit: 1024m
-    cpus: 1
- 
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - certs:/acme.sh
+    depends_on:
+      - backend
+      - frontend
+      - postgresus
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  # ===== POSTGRESUS THẬT - BACKUP TỰ ĐỘNG =====
+  postgresus:
+    image: rostislavdugin/postgresus:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      # Cấu hình cơ bản - bạn sẽ chỉnh chi tiết trong giao diện web lần đầu
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Asia/Ho_Chi_Minh
+      POSTGRES_HOST: db
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
+      # Backup mỗi ngày lúc 2h sáng, giữ 30 bản mới nhất
+      BACKUP_CRON_EXPRESSION: "0 2 * * *"
+      BACKUP_NUM_TO_KEEP: "30"
+    volumes:
+      - postgresus_config:/config
+      - postgres_data:/var/lib/postgresql/data:ro   # chỉ đọc để backup
+      - backups:/backups                                    # thư mục backup local (bạn có thể mount ra host)
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  certbot:
+    image: neilpang/acme.sh:3.0.7
+    container_name: certbot
+    networks:
+      - app-network
+    volumes:
+      - certs:/acme.sh
+    command: daemon
+    entrypoint: >
+      sh -c "
+      sleep 10 &&
+      acme.sh --set-default-ca --server letsencrypt &&
+      acme.sh --issue -d xeghepnghiaphat.io.vn --standalone --keylength 2048 \
+        --pre-hook 'nginx -s stop || true' \
+        --post-hook 'nginx -s reload || true' &&
+      acme.sh --install-cert -d xeghepnghiaphat.io.vn \
+        --key-file /acme.sh/xeghepnghiaphat.io.vn/key.pem \
+        --fullchain-file /acme.sh/xeghepnghiaphat.io.vn/fullchain.pem \
+        --reloadcmd 'nginx -s reload' &&
+      acme.sh --cron --home /acme.sh
+      "
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
-  monitor-network:
-    driver: bridge
-    # NOTE: tách riêng mạng monitoring để cô lập lưu lượng metrics khỏi app traffic
- 
+
 volumes:
   postgres_data:
-    # NOTE: Bỏ external:true -> để docker-compose tự tạo volume
+    driver: local
   backend_logs:
     driver: local
   ticket_images:
+    driver: local
+  certs:
+    driver: local
+  postgresus_config:
+    driver: local
+  backups:               # bạn có thể mount ra host nếu muốn: ./backups:/backups
     driver: local
