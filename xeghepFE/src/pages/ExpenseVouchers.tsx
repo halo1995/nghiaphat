@@ -40,6 +40,7 @@ import {
   type DriverExpenseStatus,
   type DriverExpenseType,
   type DriverExpenseAdvance,
+  type PaymentAttachment,
 } from '@/data/accounting';
 
 const statusLabels: Record<ExpenseVoucherStatus, string> = {
@@ -153,6 +154,8 @@ const ExpenseVouchersPage: React.FC = () => {
   const [driverAdvancePreview, setDriverAdvancePreview] = useState<DriverExpenseAdvance | null>(null);
   const [driverAdvanceAttachmentUrls, setDriverAdvanceAttachmentUrls] = useState<string[]>([]);
   const driverAdvanceAttachmentUrlsRef = useRef<string[]>([]);
+  const [voucherAttachmentUrls, setVoucherAttachmentUrls] = useState<string[]>([]);
+  const voucherAttachmentUrlsRef = useRef<string[]>([]);
   const [depositImages, setDepositImages] = useState<File[]>([]);
   const depositFileInputRef = useRef<HTMLInputElement | null>(null);
   const [depositImagesLoading, setDepositImagesLoading] = useState(false);
@@ -220,7 +223,7 @@ const ExpenseVouchersPage: React.FC = () => {
     setCurrentVoucher(null);
   };
 
-  const openHistoryDialog = (voucher: ExpenseVoucher) => {
+  const openHistoryDialog = (voucher: ExpenseVoucher, initialTab: 'details' | 'history' = 'history') => {
     setHistoryVoucherId(voucher.id);
     setCurrentVoucher(voucher);
     setFormState({
@@ -238,7 +241,7 @@ const ExpenseVouchersPage: React.FC = () => {
     });
     setSelectedFiles([]);
     setIsFormOpen(true);
-    setActiveTab('history');
+    setActiveTab(initialTab);
   };
 
   const formatCurrency = (amount: number) => amount.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -249,6 +252,28 @@ const ExpenseVouchersPage: React.FC = () => {
     if (Number.isNaN(date.getTime())) return '--';
     return date.toLocaleString('vi-VN', { hour12: false });
   };
+
+  const voucherAttachmentGroups = useMemo(() => {
+    if (!currentVoucher?.attachments?.length) {
+      return {
+        initial: [] as Array<{ attachment: PaymentAttachment; index: number }>,
+        payment: [] as Array<{ attachment: PaymentAttachment; index: number }>,
+      };
+    }
+    const paidAtTime = currentVoucher.paidAt ? new Date(currentVoucher.paidAt).getTime() : null;
+    const groups = {
+      initial: [] as Array<{ attachment: PaymentAttachment; index: number }>,
+      payment: [] as Array<{ attachment: PaymentAttachment; index: number }>,
+    };
+    currentVoucher.attachments.forEach((attachment, index) => {
+      const createdAt = new Date(attachment.createdAt).getTime();
+      const target = paidAtTime && !Number.isNaN(paidAtTime) && !Number.isNaN(createdAt) && createdAt >= paidAtTime
+        ? groups.payment
+        : groups.initial;
+      target.push({ attachment, index });
+    });
+    return groups;
+  }, [currentVoucher]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
@@ -306,6 +331,57 @@ const ExpenseVouchersPage: React.FC = () => {
       });
     }
   }, [toast]);
+
+  const renderAttachmentGroup = (label: string, items: Array<{ attachment: PaymentAttachment; index: number }>) => {
+    if (!items.length) {
+      return null;
+    }
+
+    const isImageFile = (attachment: PaymentAttachment) => {
+      if (attachment.contentType) {
+        return attachment.contentType.toLowerCase().startsWith('image/');
+      }
+      return /\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(attachment.fileName);
+    };
+
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-700">{label}</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+          {items.map(({ attachment, index }) => {
+            const previewUrl = voucherAttachmentUrls[index];
+            const isImage = isImageFile(attachment);
+
+            return (
+              <div
+                key={`${attachment.id}-${index}`}
+                className="flex flex-col gap-2 rounded-md border bg-white p-3 shadow-sm"
+              >
+                <div className="relative h-32 w-full overflow-hidden rounded bg-gray-100">
+                  {isImage && previewUrl ? (
+                    <img src={previewUrl} alt={attachment.fileName} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                      {attachment.fileName}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="truncate" title={attachment.fileName}>
+                    {attachment.fileName}
+                  </span>
+                  <span>{formatDateTime(attachment.createdAt)}</span>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => openAttachment(attachment)}>
+                  Xem / tải
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const createMutation = useMutation<ExpenseVoucher, Error, CreateExpenseVoucherInput>({
     mutationFn: createExpenseVoucher,
@@ -630,6 +706,57 @@ const ExpenseVouchersPage: React.FC = () => {
       revokeAll();
     };
   }, [driverAdvancePreview]);
+
+  useEffect(() => {
+    const revokeAll = () => {
+      voucherAttachmentUrlsRef.current.forEach((url) => url && URL.revokeObjectURL(url));
+      voucherAttachmentUrlsRef.current = [];
+    };
+
+    revokeAll();
+    setVoucherAttachmentUrls([]);
+
+    if (!currentVoucher || currentVoucher.attachments.length === 0) {
+      return () => {
+        revokeAll();
+      };
+    }
+
+    let cancelled = false;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    const loadPreviews = async () => {
+      const urls: string[] = [];
+      for (const attachment of currentVoucher.attachments) {
+        try {
+          const response = await fetch(attachment.downloadUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (!response.ok) {
+            throw new Error('Failed to load attachment');
+          }
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          urls.push(objectUrl);
+        } catch (_error) {
+          urls.push('');
+        }
+      }
+      if (cancelled) {
+        urls.forEach((url) => url && URL.revokeObjectURL(url));
+        return;
+      }
+      voucherAttachmentUrlsRef.current = urls.filter((url) => !!url);
+      setVoucherAttachmentUrls(urls);
+    };
+
+    loadPreviews();
+
+    return () => {
+      cancelled = true;
+      revokeAll();
+    };
+  }, [currentVoucher]);
 
   const handleApproveAdvance = (status: DriverExpenseStatus) => {
     if (!driverAdvancePreview || !user?.id) {
@@ -965,16 +1092,16 @@ const ExpenseVouchersPage: React.FC = () => {
                           <TableCell>{formatDateTime(voucher.createdAt)}</TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="outline" onClick={() => openHistoryDialog(voucher)}>
+                              <Button size="sm" variant="outline" onClick={() => openHistoryDialog(voucher, 'history')}>
                                 Chi tiết
                               </Button>
                               {voucher.attachments.length > 0 && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => openAttachment(voucher.attachments[0])}
+                                  onClick={() => openHistoryDialog(voucher, 'details')}
                                 >
-                                  Xem file
+                                  Xem ảnh
                                 </Button>
                               )}
                               {voucher.status === 'DRAFT' && isAccountant && (
@@ -1288,6 +1415,27 @@ const ExpenseVouchersPage: React.FC = () => {
                       {file.name}
                     </Badge>
                   ))}
+                </div>
+              )}
+              {currentVoucher && currentVoucher.attachments.length > 0 && (
+                <div className="space-y-3 rounded-md border border-dashed border-gray-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-gray-800">Tệp đính kèm đã lưu</h4>
+                    <span className="text-xs text-muted-foreground">
+                      Tổng {currentVoucher.attachments.length} tệp
+                    </span>
+                  </div>
+                  {voucherAttachmentUrls.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Đang tải hình ảnh...</p>
+                  )}
+                  {renderAttachmentGroup('Ảnh nộp kèm phiếu', voucherAttachmentGroups.initial)}
+                  {renderAttachmentGroup(
+                    currentVoucher.paidAt ? 'Ảnh chuyển tiền' : 'Ảnh bổ sung',
+                    voucherAttachmentGroups.payment,
+                  )}
+                  {voucherAttachmentGroups.initial.length === 0 && voucherAttachmentGroups.payment.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Không có tệp đính kèm.</p>
+                  )}
                 </div>
               )}
             </TabsContent>

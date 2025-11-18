@@ -18,7 +18,7 @@ import type {
   DriverExpenseType as ApiDriverExpenseType,
 } from '@/services/api';
 
-const secureAttachmentUrl = (url: string): string => {
+export const secureAttachmentUrl = (url: string): string => {
   if (!url) {
     return url;
   }

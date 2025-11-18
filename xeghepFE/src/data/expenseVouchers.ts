@@ -9,7 +9,7 @@ import type {
   ExpenseVoucherCategory,
   PaymentAttachmentResponse,
 } from '@/services/api';
-import type { PaymentAttachment } from './accounting';
+import { secureAttachmentUrl, type PaymentAttachment } from './accounting';
 
 export type { ExpenseVoucherStatus, ExpenseVoucherCategory } from '@/services/api';
 
@@ -119,7 +119,7 @@ const mapAttachment = (attachment: PaymentAttachmentResponse): PaymentAttachment
   sizeBytes: attachment.sizeBytes,
   createdAt: attachment.createdAt,
   expiresAt: attachment.expiresAt ?? undefined,
-  downloadUrl: attachment.downloadUrl,
+  downloadUrl: secureAttachmentUrl(attachment.downloadUrl),
 });
 
 const mapVoucher = (voucher: ApiExpenseVoucher): ExpenseVoucher => ({
