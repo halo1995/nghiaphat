@@ -905,10 +905,10 @@ const CallCenter = () => {
                             {/* Header: Name - Phone - Status */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-base text-gray-800 flex items-center gap-2">
+                                <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
                                   {trip.customerName}
                                 </h3>
-                                <a href={`tel:${trip.customerPhone}`} className="text-muted-foreground text-sm hover:text-green-600 flex items-center gap-1">
+                                <a href={`tel:${trip.customerPhone}`} className="text-muted-foreground text-base hover:text-green-600 flex items-center gap-1">
                                   <Phone size={12} /> {trip.customerPhone}
                                 </a>
                               </div>
@@ -918,27 +918,33 @@ const CallCenter = () => {
                             </div>
 
                             {/* Locations: Compact Timeline */}
-                            <div className="flex flex-col gap-1 text-sm">
+                            <div className="flex flex-col gap-1 text-base">
                               <div className="flex items-start gap-2">
-                                <MapPin size={14} className="text-green-600 mt-0.5 flex-shrink-0" />
+                                <MapPin size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
                                 <span className="font-medium text-gray-700">{trip.pickupLocation}</span>
                               </div>
                               {/* Connector line */}
                               <div className="pl-1.5 py-0.5 ml-[6px] border-l-2 border-dashed border-gray-200 h-2"></div>
                               <div className="flex items-start gap-2">
-                                <MapPin size={14} className="text-red-600 mt-0.5 flex-shrink-0" />
+                                <MapPin size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
                                 <span className="font-medium text-gray-700">{trip.dropoffLocation}</span>
                               </div>
                             </div>
 
                             {/* Meta Row: Time | Pax | Vehicle | Notes */}
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1">
-                                <CalendarIcon size={12} />
-                                {new Date(trip.pickupTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                                <CalendarIcon size={14} />
+                                {new Date(trip.pickupTime).toLocaleString('vi-VN', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
                               </span>
                               <span className="flex items-center gap-1">
-                                <Users size={12} />
+                                <Users size={14} />
                                 {trip.passengers} khách
                               </span>
                               {trip.fullVehicle && (
@@ -988,7 +994,7 @@ const CallCenter = () => {
                                     size="sm"
                                     variant="outline"
                                     className="h-8 text-xs gap-1"
-                                    disabled={trip.status === 'Đã hủy'}
+                                    disabled={trip.status === 'Đã hủy' || trip.status === 'Hoàn thành'}
                                     onClick={() => {
                                       setSelectedTripForAdvance(trip);
                                       setCustomerAdvanceForm({

@@ -311,6 +311,10 @@ public class PaymentServiceImpl implements PaymentService {
             if (trip.getStatus() == Trip.TripStatus.DA_HUY) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tạo phiếu ứng trước cho chuyến đã hủy");
             }
+            
+            if (trip.getStatus() == Trip.TripStatus.HOAN_THANH) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tạo phiếu ứng trước cho chuyến đã hoàn thành");
+            }
 
             if (trip.getDriverId() != null && !Objects.equals(trip.getDriverId(), driver.getId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip is not assigned to the driver");
