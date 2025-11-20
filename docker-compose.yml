@@ -117,7 +117,7 @@ services:
       POSTGRES_HOST: db
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
+      POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
       # Backup mỗi ngày lúc 2h sáng, giữ 30 bản mới nhất
       BACKUP_CRON_EXPRESSION: "0 2 * * *"
       BACKUP_NUM_TO_KEEP: "30"
