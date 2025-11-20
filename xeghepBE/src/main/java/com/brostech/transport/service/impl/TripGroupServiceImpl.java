@@ -9,7 +9,9 @@ import com.brostech.transport.jpa.repository.VehicleRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.UserRepository;
 import com.brostech.transport.service.TripGroupService;
+import com.brostech.transport.service.ZaloNotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -37,12 +39,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class TripGroupServiceImpl implements TripGroupService {
 
     private final TripGroupRepository tripGroupRepository;
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
+    private final ZaloNotificationService zaloNotificationService;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final Set<Trip.TripStatus> DRIVER_CONFIRMED_STATUSES =
@@ -154,6 +158,10 @@ public class TripGroupServiceImpl implements TripGroupService {
         group.setDriverName(driver.getName());
         
         group = tripGroupRepository.save(group);
+        
+        // Send Zalo notification to customers in the group
+        sendZaloNotifications(group, driver);
+        
         return toDTO(group);
     }
 
@@ -324,5 +332,42 @@ public class TripGroupServiceImpl implements TripGroupService {
         }
         Trip.TripStatus status = trip.getStatus();
         return status != null && DRIVER_CONFIRMED_STATUSES.contains(status);
+    }
+
+    private void sendZaloNotifications(TripGroup group, com.brostech.transport.jpa.entity.User driver) {
+        try {
+            // Get all trips in the group
+            List<Long> tripIds = parseTripIds(group.getTripIds());
+            if (tripIds.isEmpty()) {
+                log.info("No trips in group {}, skipping Zalo notifications", group.getId());
+                return;
+            }
+
+            List<Trip> trips = tripRepository.findAllById(tripIds);
+            
+            // Get vehicle info if available
+            com.brostech.transport.jpa.entity.Vehicle vehicle = null;
+            if (group.getVehicleId() != null) {
+                vehicle = vehicleRepository.findById(group.getVehicleId()).orElse(null);
+            }
+
+            // Send notification for each trip
+            for (Trip trip : trips) {
+                try {
+                    boolean sent = zaloNotificationService.sendTripConfirmation(trip, driver, vehicle);
+                    if (sent) {
+                        log.info("Sent Zalo notification for trip {} to customer {}", 
+                            trip.getId(), trip.getCustomerPhone());
+                    }
+                } catch (Exception e) {
+                    // Log but don't fail the whole operation
+                    log.error("Failed to send Zalo notification for trip {}: {}", 
+                        trip.getId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error sending Zalo notifications for group {}: {}", 
+                group.getId(), e.getMessage());
+        }
     }
 }

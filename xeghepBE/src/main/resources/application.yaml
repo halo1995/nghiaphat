@@ -48,6 +48,9 @@ server:
   tomcat:
     threads:
       max: ${REQUEST_MAX_THREAD:2500}
+      min-spare: ${REQUEST_MIN_THREAD:100}
+      max-connections: ${REQUEST_MAX_CONNECTIONS:10000}
+    accept-count: ${REQUEST_ACCEPT_COUNT:100}
 
 payment:
   attachments:
@@ -55,3 +58,14 @@ payment:
     retention-days: ${PAYMENT_ATTACHMENTS_RETENTION_DAYS:40}
     max-files: ${PAYMENT_ATTACHMENTS_MAX_FILES:3}
     max-file-size-bytes: ${PAYMENT_ATTACHMENTS_MAX_FILE_SIZE_BYTES:10485760}
+
+# Zalo ZNS Configuration
+zalo:
+  app:
+    id: ${ZALO_APP_ID:}
+    secret-key: ${ZALO_SECRET_KEY:}
+    access-token: ${ZALO_ACCESS_TOKEN:}
+  template:
+    id: ${ZALO_TEMPLATE_ID:}
+  zns:
+    api-url: https://business.openapi.zalo.me/message/template

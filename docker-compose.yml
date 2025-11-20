@@ -14,6 +14,11 @@ services:
       LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
+      # Zalo ZNS Configuration (optional - leave empty to disable)
+      ZALO_APP_ID: ${ZALO_APP_ID:-}
+      ZALO_SECRET_KEY: ${ZALO_SECRET_KEY:-}
+      ZALO_ACCESS_TOKEN: ${ZALO_ACCESS_TOKEN:-}
+      ZALO_TEMPLATE_ID: ${ZALO_TEMPLATE_ID:-}
     depends_on:
       - db
     networks:
