@@ -10,7 +10,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
+      SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
       LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
@@ -56,7 +56,7 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$+A(B7^dGi
+      POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
