@@ -19,8 +19,8 @@ RUN addgroup --system javauser && adduser --system --ingroup javauser javauser
 
 COPY --from=build /app/target/*.jar app.jar
 
-# Change ownership of the application
-RUN chown -R javauser:javauser /app
+# Create logs directory and change ownership
+RUN mkdir -p /app/logs && chown -R javauser:javauser /app
 
 # Switch to non-root user
 USER javauser

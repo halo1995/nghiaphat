@@ -25,8 +25,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "3.0"
-          memory: 4G
+          cpus: "2.5"
+          memory: 3.5G
     logging:
       driver: "json-file"
       options:
@@ -43,8 +43,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          cpus: "0.5"
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -68,7 +68,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 4G
+          memory: 3G
     logging:
       driver: "json-file"
       options:
