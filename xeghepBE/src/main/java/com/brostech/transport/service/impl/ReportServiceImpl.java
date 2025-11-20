@@ -30,6 +30,9 @@ public class ReportServiceImpl implements ReportService {
     private final DriverExpenseAdvanceRepository driverExpenseAdvanceRepository;
     private final CompanyWalletRepository walletRepository;
     private final UserRepository userRepository;
+    private final TripPaymentRepository tripPaymentRepository;
+    private final DepositRepository depositRepository;
+    private final TripRepository tripRepository;
 
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat displayDateFormat = new SimpleDateFormat("dd/MM/yyyy");
@@ -115,6 +118,14 @@ public class ReportServiceImpl implements ReportService {
 
             // Sheet 5: Công nợ tài xế
             createDriverDebtSheet(workbook, headerStyle, currencyStyle, dateStyle, driverDebts);
+
+            // Sheet 6: Lịch sử thu tiền (TripPayment)
+            List<TripPayment> tripPayments = tripPaymentRepository.findByCollectedAtBetween(fromDate, toDate);
+            createPaymentHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, tripPayments);
+
+            // Sheet 7: Lịch sử nộp tiền (Deposit)
+            List<Deposit> deposits = depositRepository.findByCreatedAtBetween(fromDate, toDate);
+            createDepositHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, deposits);
 
             // Write to byte array
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -530,6 +541,149 @@ public class ReportServiceImpl implements ReportService {
             case REJECTED: return "Từ chối";
             default: return status.name();
         }
+    }
+
+    private void createPaymentHistorySheet(Workbook workbook, CellStyle headerStyle,
+                                          CellStyle currencyStyle, CellStyle dateStyle,
+                                          List<TripPayment> tripPayments) {
+        Sheet sheet = workbook.createSheet("Lịch sử thu tiền");
+        
+        // Header
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"STT", "Ngày thu", "Tài xế", "Chuyến", "Khách hàng", "SĐT Khách", 
+                           "Điểm đón", "Điểm trả", "Số tiền", "Phương thức", "Ghi chú", "Người ghi nhận"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        
+        int rowNum = 1;
+        int stt = 1;
+        Map<Long, User> userCache = new HashMap<>();
+        Map<Long, Trip> tripCache = new HashMap<>();
+        
+        for (TripPayment payment : tripPayments) {
+            Row row = sheet.createRow(rowNum++);
+            row.createCell(0).setCellValue(stt++);
+            
+            // Date
+            Cell dateCell = row.createCell(1);
+            dateCell.setCellValue(payment.getCollectedAt());
+            dateCell.setCellStyle(dateStyle);
+            
+            // Get trip details
+            String driverName = "";
+            String customerName = "";
+            String customerPhone = "";
+            String pickup = "";
+            String dropoff = "";
+            
+            if (payment.getTripId() != null) {
+                Trip trip = getTripFromCache(payment.getTripId(), tripCache);
+                if (trip != null) {
+                    if (trip.getDriverId() != null) {
+                        driverName = getUserName(trip.getDriverId(), userCache);
+                    }
+                    customerName = trip.getCustomerName() != null ? trip.getCustomerName() : "";
+                    customerPhone = trip.getCustomerPhone() != null ? trip.getCustomerPhone() : "";
+                    pickup = trip.getPickupLocation() != null ? trip.getPickupLocation() : "";
+                    dropoff = trip.getDropoffLocation() != null ? trip.getDropoffLocation() : "";
+                }
+            }
+            
+            row.createCell(2).setCellValue(driverName);
+            row.createCell(3).setCellValue(payment.getTripId() != null ? "#" + payment.getTripId() : "");
+            row.createCell(4).setCellValue(customerName);
+            row.createCell(5).setCellValue(customerPhone);
+            row.createCell(6).setCellValue(pickup);
+            row.createCell(7).setCellValue(dropoff);
+            
+            // Amount
+            Cell amountCell = row.createCell(8);
+            amountCell.setCellValue(payment.getAmount());
+            amountCell.setCellStyle(currencyStyle);
+            
+            // Method
+            String method = payment.getMethod() != null ? payment.getMethod() : "";
+            row.createCell(9).setCellValue(method.equals("cash") ? "Tiền mặt" : "Chuyển khoản");
+            
+            // Note
+            row.createCell(10).setCellValue(payment.getNote() != null ? payment.getNote() : "");
+            
+            // Recorded by
+            row.createCell(11).setCellValue(getUserName(payment.getRecordedBy(), userCache));
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    private void createDepositHistorySheet(Workbook workbook, CellStyle headerStyle,
+                                          CellStyle currencyStyle, CellStyle dateStyle,
+                                          List<Deposit> deposits) {
+        Sheet sheet = workbook.createSheet("Lịch sử nộp tiền");
+        
+        // Header
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"STT", "Ngày nộp", "Tài xế", "Số tiền", "Số chứng từ", "Ghi chú", "Người ghi nhận"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        
+        int rowNum = 1;
+        int stt = 1;
+        Map<Long, User> userCache = new HashMap<>();
+        
+        for (Deposit deposit : deposits) {
+            Row row = sheet.createRow(rowNum++);
+            row.createCell(0).setCellValue(stt++);
+            
+            // Date
+            Cell dateCell = row.createCell(1);
+            dateCell.setCellValue(deposit.getCreatedAt());
+            dateCell.setCellStyle(dateStyle);
+            
+            // Driver
+            String driverName = getUserName(Long.parseLong(deposit.getDriverId()), userCache);
+            row.createCell(2).setCellValue(driverName);
+            
+            // Amount
+            Cell amountCell = row.createCell(3);
+            amountCell.setCellValue(deposit.getAmount());
+            amountCell.setCellStyle(currencyStyle);
+            
+            // Attachments count
+            int attachmentCount = deposit.getAttachments() != null ? deposit.getAttachments().size() : 0;
+            row.createCell(4).setCellValue(attachmentCount > 0 ? attachmentCount + " file" : "Không có");
+            
+            // Note
+            row.createCell(5).setCellValue(deposit.getNote() != null ? deposit.getNote() : "");
+            
+            // Recorded by
+            row.createCell(6).setCellValue(getUserName(deposit.getRecordedBy(), userCache));
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    private Trip getTripFromCache(Long tripId, Map<Long, Trip> cache) {
+        if (tripId == null) return null;
+        if (cache.containsKey(tripId)) {
+            return cache.get(tripId);
+        }
+        Trip trip = tripRepository.findById(tripId).orElse(null);
+        if (trip != null) {
+            cache.put(tripId, trip);
+        }
+        return trip;
     }
 }
 
