@@ -27,6 +27,11 @@ services:
         limits:
           cpus: "3.0"
           memory: 4G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -40,6 +45,11 @@ services:
         limits:
           cpus: "1.0"
           memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:16-alpine
@@ -59,6 +69,11 @@ services:
         limits:
           cpus: "2.0"
           memory: 4G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   nginx:
     image: nginx:alpine
@@ -69,6 +84,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - certs:/acme.sh
+      - certbot_www:/var/www/certbot
     depends_on:
       - backend
       - frontend
@@ -81,6 +97,11 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ===== POSTGRESUS THẬT - BACKUP TỰ ĐỘNG =====
   postgresus:
@@ -102,8 +123,8 @@ services:
       BACKUP_NUM_TO_KEEP: "30"
     volumes:
       - postgresus_config:/config
-      - postgres_data:/var/lib/postgresql/data:ro   # chỉ đọc để backup
-      - backups:/backups                                    # thư mục backup local (bạn có thể mount ra host)
+      - postgres_data:/var/lib/postgresql/data:ro # chỉ đọc để backup
+      - backups:/backups # thư mục backup local (bạn có thể mount ra host)
     networks:
       - app-network
     deploy:
@@ -111,6 +132,11 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   certbot:
     image: neilpang/acme.sh:3.0.7
@@ -119,20 +145,17 @@ services:
       - app-network
     volumes:
       - certs:/acme.sh
+      - certbot_www:/var/www/certbot
     command: daemon
     entrypoint: >
-      sh -c "
-      sleep 10 &&
-      acme.sh --set-default-ca --server letsencrypt &&
-      acme.sh --issue -d xeghepnghiaphat.io.vn --standalone --keylength 2048 \
+      sh -c " sleep 10 && acme.sh --set-default-ca --server letsencrypt && acme.sh --issue -d xeghepnghiaphat.io.vn --webroot /var/www/certbot --keylength 2048 \
         --pre-hook 'nginx -s stop || true' \
         --post-hook 'nginx -s reload || true' &&
       acme.sh --install-cert -d xeghepnghiaphat.io.vn \
         --key-file /acme.sh/xeghepnghiaphat.io.vn/key.pem \
         --fullchain-file /acme.sh/xeghepnghiaphat.io.vn/fullchain.pem \
         --reloadcmd 'nginx -s reload' &&
-      acme.sh --cron --home /acme.sh
-      "
+      acme.sh --cron --home /acme.sh "
     restart: unless-stopped
 
 networks:
@@ -150,5 +173,8 @@ volumes:
     driver: local
   postgresus_config:
     driver: local
-  backups:               # bạn có thể mount ra host nếu muốn: ./backups:/backups
+  backups:
+    # bạn có thể mount ra host nếu muốn: ./backups:/backups
+    driver: local
+  certbot_www:
     driver: local
