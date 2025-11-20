@@ -31,7 +31,7 @@ public class ReportServiceImpl implements ReportService {
     private final CompanyWalletRepository walletRepository;
     private final UserRepository userRepository;
     private final TripPaymentRepository tripPaymentRepository;
-    private final DepositRepository depositRepository;
+    private final DepositRecordRepository depositRecordRepository;
     private final TripRepository tripRepository;
 
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -123,9 +123,9 @@ public class ReportServiceImpl implements ReportService {
             List<TripPayment> tripPayments = tripPaymentRepository.findByCollectedAtBetween(fromDate, toDate);
             createPaymentHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, tripPayments);
 
-            // Sheet 7: Lịch sử nộp tiền (Deposit)
-            List<Deposit> deposits = depositRepository.findByCreatedAtBetween(fromDate, toDate);
-            createDepositHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, deposits);
+            // Sheet 7: Lịch sử nộp tiền (DepositRecord)
+            List<DepositRecord> depositRecords = depositRecordRepository.findByCreatedAtBetween(fromDate, toDate);
+            createDepositHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, depositRecords);
 
             // Write to byte array
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -623,7 +623,7 @@ public class ReportServiceImpl implements ReportService {
 
     private void createDepositHistorySheet(Workbook workbook, CellStyle headerStyle,
                                           CellStyle currencyStyle, CellStyle dateStyle,
-                                          List<Deposit> deposits) {
+                                          List<DepositRecord> depositRecords) {
         Sheet sheet = workbook.createSheet("Lịch sử nộp tiền");
         
         // Header
@@ -639,33 +639,33 @@ public class ReportServiceImpl implements ReportService {
         int stt = 1;
         Map<Long, User> userCache = new HashMap<>();
         
-        for (Deposit deposit : deposits) {
+        for (DepositRecord depositRecord : depositRecords) {
             Row row = sheet.createRow(rowNum++);
             row.createCell(0).setCellValue(stt++);
             
             // Date
             Cell dateCell = row.createCell(1);
-            dateCell.setCellValue(deposit.getCreatedAt());
+            dateCell.setCellValue(depositRecord.getCreatedAt());
             dateCell.setCellStyle(dateStyle);
             
             // Driver
-            String driverName = getUserName(Long.parseLong(deposit.getDriverId()), userCache);
+            String driverName = getUserName(Long.parseLong(depositRecord.getDriverId()), userCache);
             row.createCell(2).setCellValue(driverName);
             
             // Amount
             Cell amountCell = row.createCell(3);
-            amountCell.setCellValue(deposit.getAmount());
+            amountCell.setCellValue(depositRecord.getAmount());
             amountCell.setCellStyle(currencyStyle);
             
             // Attachments count
-            int attachmentCount = deposit.getAttachments() != null ? deposit.getAttachments().size() : 0;
+            int attachmentCount = depositRecord.getAttachments() != null ? depositRecord.getAttachments().size() : 0;
             row.createCell(4).setCellValue(attachmentCount > 0 ? attachmentCount + " file" : "Không có");
             
             // Note
-            row.createCell(5).setCellValue(deposit.getNote() != null ? deposit.getNote() : "");
+            row.createCell(5).setCellValue(depositRecord.getNote() != null ? depositRecord.getNote() : "");
             
             // Recorded by
-            row.createCell(6).setCellValue(getUserName(deposit.getRecordedBy(), userCache));
+            row.createCell(6).setCellValue(getUserName(depositRecord.getRecordedBy(), userCache));
         }
         
         // Auto-size columns
