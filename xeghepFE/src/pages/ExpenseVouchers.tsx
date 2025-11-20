@@ -347,7 +347,7 @@ const ExpenseVouchersPage: React.FC = () => {
     return (
       <div className="space-y-2">
         <p className="text-sm font-medium text-gray-700">{label}</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+        <div className="space-y-1">
           {items.map(({ attachment, index }) => {
             const previewUrl = voucherAttachmentUrls[index];
             const isImage = isImageFile(attachment);
@@ -355,25 +355,37 @@ const ExpenseVouchersPage: React.FC = () => {
             return (
               <div
                 key={`${attachment.id}-${index}`}
-                className="flex flex-col gap-2 rounded-md border bg-white p-3 shadow-sm"
+                className="flex items-center gap-3 rounded-md border bg-white p-2 shadow-sm hover:bg-gray-50 transition-colors"
               >
-                <div className="relative h-32 w-full overflow-hidden rounded bg-gray-100">
+                {/* Thumbnail */}
+                <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-gray-100">
                   {isImage && previewUrl ? (
                     <img src={previewUrl} alt={attachment.fileName} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
-                      {attachment.fileName}
+                    <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                      📄
                     </div>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span className="truncate" title={attachment.fileName}>
+
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate" title={attachment.fileName}>
                     {attachment.fileName}
-                  </span>
-                  <span>{formatDateTime(attachment.createdAt)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDateTime(attachment.createdAt)}
+                  </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => openAttachment(attachment)}>
-                  Xem / tải
+
+                {/* Actions */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-shrink-0"
+                  onClick={() => openAttachment(attachment)}
+                >
+                  Xem
                 </Button>
               </div>
             );
@@ -547,10 +559,10 @@ const ExpenseVouchersPage: React.FC = () => {
     }
 
     if (paymentImages.length === 0) {
-      toast({ 
-        title: 'Thiếu ảnh chuyển tiền', 
-        description: 'Vui lòng upload ít nhất 1 ảnh chuyển tiền', 
-        variant: 'destructive' 
+      toast({
+        title: 'Thiếu ảnh chuyển tiền',
+        description: 'Vui lòng upload ít nhất 1 ảnh chuyển tiền',
+        variant: 'destructive'
       });
       return;
     }
@@ -629,7 +641,7 @@ const ExpenseVouchersPage: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       toast({
         title: 'Xuất báo cáo thành công',
         description: 'File Excel đã được tải xuống',
@@ -897,8 +909,8 @@ const ExpenseVouchersPage: React.FC = () => {
                 <Plus className="mr-2 h-4 w-4" />
                 Tạo phiếu chi
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setExportFromDate(currentMonthRange.from);
                   setExportToDate(currentMonthRange.to);
@@ -1133,17 +1145,17 @@ const ExpenseVouchersPage: React.FC = () => {
                                   </Button>
                                 </>
                               )}
-                              {voucher.status === 'APPROVED' && 
-                               isAccountant && (
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => handleStatusChange(voucher, 'PAID')}
-                                  disabled={statusMutation.isPending}
-                                >
-                                  Xác nhận chuyển tiền
-                                </Button>
-                              )}
+                              {voucher.status === 'APPROVED' &&
+                                isAccountant && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleStatusChange(voucher, 'PAID')}
+                                    disabled={statusMutation.isPending}
+                                  >
+                                    Xác nhận chuyển tiền
+                                  </Button>
+                                )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1292,7 +1304,7 @@ const ExpenseVouchersPage: React.FC = () => {
         if (!open) {
           setIsFormOpen(false);
           setHistoryVoucherId(null);
-	  setCurrentVoucher(null);
+          setCurrentVoucher(null);
           resetForm();
         }
       }}>

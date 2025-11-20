@@ -755,7 +755,7 @@ const Accounting: React.FC = () => {
                 <TableHead className="text-right">Đã thu</TableHead>
                 <TableHead className="text-right">Đã nộp</TableHead>
                 <TableHead className="text-right">Công nợ</TableHead>
-              <TableHead className="text-right">Tạm ứng</TableHead>
+                <TableHead className="text-right">Tạm ứng</TableHead>
                 <TableHead className="text-right">Chuyến hoàn thành</TableHead>
                 <TableHead className="text-right">Nộp tiền</TableHead>
               </TableRow>
@@ -764,89 +764,89 @@ const Accounting: React.FC = () => {
               {driverSummaries.map((driver) => {
                 const driverAttachments = depositAttachments[driver.driverId] ?? [];
                 return (
-                <TableRow key={driver.driverId}>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-gray-900">{driver.driverName}</span>
-                      <span className="text-xs text-muted-foreground">#{driver.driverId}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">{driver.revenue.toLocaleString('vi-VN')} ₫</TableCell>
-                  <TableCell className="text-right">{driver.deposited.toLocaleString('vi-VN')} ₫</TableCell>
-                  <TableCell className="text-right font-semibold text-amber-600">{driver.outstanding.toLocaleString('vi-VN')} ₫</TableCell>
-                <TableCell className="text-right text-purple-600">{driver.advanceOutstanding.toLocaleString('vi-VN')} ₫</TableCell>
-                  <TableCell className="text-right">{driver.completedTrips}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Input
-                        type="number"
-                        className="w-32"
-                        placeholder="Số tiền"
-                        value={depositValues[driver.driverId] ?? ''}
-                        onChange={(event) =>
-                          setDepositValues((prev) => ({ ...prev, [driver.driverId]: event.target.value }))
-                        }
-                        min={0}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={depositImagesLoading}
-                        onClick={() => {
-                          setDepositAttachmentTarget(driver.driverId);
-                          depositFileInputRef.current?.click();
-                        }}
-                      >
-                        Ảnh{driverAttachments.length ? ` (${driverAttachments.length})` : ''}
-                      </Button>
-                      {driverAttachments.length > 0 && (
+                  <TableRow key={driver.driverId}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">{driver.driverName}</span>
+                        <span className="text-xs text-muted-foreground">#{driver.driverId}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">{driver.revenue.toLocaleString('vi-VN')} ₫</TableCell>
+                    <TableCell className="text-right">{driver.deposited.toLocaleString('vi-VN')} ₫</TableCell>
+                    <TableCell className="text-right font-semibold text-amber-600">{driver.outstanding.toLocaleString('vi-VN')} ₫</TableCell>
+                    <TableCell className="text-right text-purple-600">{driver.advanceOutstanding.toLocaleString('vi-VN')} ₫</TableCell>
+                    <TableCell className="text-right">{driver.completedTrips}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Input
+                          type="number"
+                          className="w-32"
+                          placeholder="Số tiền"
+                          value={depositValues[driver.driverId] ?? ''}
+                          onChange={(event) =>
+                            setDepositValues((prev) => ({ ...prev, [driver.driverId]: event.target.value }))
+                          }
+                          min={0}
+                        />
                         <Button
                           type="button"
-                          variant="ghost"
-                          onClick={() =>
-                            setDepositAttachments((prev) => {
-                              const next = { ...prev };
-                              delete next[driver.driverId];
-                              return next;
-                            })
-                          }
+                          variant="outline"
+                          disabled={depositImagesLoading}
+                          onClick={() => {
+                            setDepositAttachmentTarget(driver.driverId);
+                            depositFileInputRef.current?.click();
+                          }}
                         >
-                          Xóa ảnh
+                          Ảnh{driverAttachments.length ? ` (${driverAttachments.length})` : ''}
                         </Button>
-                      )}
-                      <Button
-                        disabled={depositMut.isPending || depositImagesLoading}
-                        onClick={() => {
-                          const rawValue = depositValues[driver.driverId];
-                          const amount = Number(rawValue || 0);
-                          if (!amount || amount <= 0) {
-                            toast({ title: 'Lỗi', description: 'Nhập số tiền hợp lệ', variant: 'destructive' });
-                            return;
-                          }
-                          depositMut.mutate({
-                            driverId: driver.driverId,
-                            amount,
-                            note: 'Nộp tiền mặt',
-                            attachments: driverAttachments,
-                          });
-                          setDepositValues((prev) => ({ ...prev, [driver.driverId]: '' }));
-                        }}
-                      >
-                        Nộp
-                      </Button>
-                    </div>
-                    {driverAttachments.length > 0 && (
-                      <div className="mt-2 flex flex-wrap justify-end gap-2">
-                        {driverAttachments.map((file, idx) => (
-                          <Badge key={`${driver.driverId}-${idx}`} variant="outline">
-                            {file.name}
-                          </Badge>
-                        ))}
+                        {driverAttachments.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() =>
+                              setDepositAttachments((prev) => {
+                                const next = { ...prev };
+                                delete next[driver.driverId];
+                                return next;
+                              })
+                            }
+                          >
+                            Xóa ảnh
+                          </Button>
+                        )}
+                        <Button
+                          disabled={depositMut.isPending || depositImagesLoading}
+                          onClick={() => {
+                            const rawValue = depositValues[driver.driverId];
+                            const amount = Number(rawValue || 0);
+                            if (!amount || amount <= 0) {
+                              toast({ title: 'Lỗi', description: 'Nhập số tiền hợp lệ', variant: 'destructive' });
+                              return;
+                            }
+                            depositMut.mutate({
+                              driverId: driver.driverId,
+                              amount,
+                              note: 'Nộp tiền mặt',
+                              attachments: driverAttachments,
+                            });
+                            setDepositValues((prev) => ({ ...prev, [driver.driverId]: '' }));
+                          }}
+                        >
+                          Nộp
+                        </Button>
                       </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
+                      {driverAttachments.length > 0 && (
+                        <div className="mt-2 flex flex-wrap justify-end gap-2">
+                          {driverAttachments.map((file, idx) => (
+                            <Badge key={`${driver.driverId}-${idx}`} variant="outline">
+                              {file.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
               })}
             </TableBody>
           </Table>
@@ -1155,15 +1155,15 @@ const Accounting: React.FC = () => {
                     <TableCell className="text-right">{deposit.amount.toLocaleString('vi-VN')} ₫</TableCell>
                     <TableCell>
                       {deposit.attachments.length > 0 ? (
-                        <div className="flex flex-col gap-1">
-                          {deposit.attachments.map((attachment) => (
+                        <div className="flex flex-wrap gap-1">
+                          {deposit.attachments.map((attachment, idx) => (
                             <Button
-                              key={attachment.id}
-                              variant="link"
+                              key={attachment.id || idx}
+                              variant="outline"
                               size="sm"
                               onClick={() => openAttachment(attachment)}
                             >
-                              {attachment.fileName}
+                              Xem ảnh {deposit.attachments.length > 1 ? `(${idx + 1})` : ''}
                             </Button>
                           ))}
                         </div>
@@ -1208,125 +1208,124 @@ const Accounting: React.FC = () => {
             <TabsContent value="customer">
               {previewAdvance && (
                 <div className="grid gap-6 md:grid-cols-[2fr,1fr]">
-              <div className="space-y-4">
-                {previewAttachments.length > 0 ? (
-                  <>
-                    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
-                      {activeCustomerAttachmentUrl ? (
-                        <img
-                          src={activeCustomerAttachmentUrl}
-                          alt={activeCustomerAttachment?.fileName ?? 'attachment'}
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Không thể tải ảnh</span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {previewAttachments.map((attachment, index) => {
-                        const previewUrl = customerAttachmentPreviewUrls[index] ?? '';
-                        const isActive = index === previewImageIndex;
-                        return (
-                          <button
-                            key={attachment.id}
-                            type="button"
-                            onClick={() => setPreviewImageIndex(index)}
-                            className={`h-16 w-16 overflow-hidden rounded border ${
-                              isActive ? 'ring-2 ring-primary ring-offset-2' : 'opacity-80 hover:opacity-100'
-                            }`}
-                          >
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt={attachment.fileName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <span className="flex h-full w-full items-center justify-center px-1 text-[10px] text-muted-foreground">
-                                Xem ảnh
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {activeCustomerAttachment && (
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openAttachment(activeCustomerAttachment)}
-                        >
-                          Mở file gốc
-                        </Button>
+                  <div className="space-y-4">
+                    {previewAttachments.length > 0 ? (
+                      <>
+                        <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                          {activeCustomerAttachmentUrl ? (
+                            <img
+                              src={activeCustomerAttachmentUrl}
+                              alt={activeCustomerAttachment?.fileName ?? 'attachment'}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Không thể tải ảnh</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {previewAttachments.map((attachment, index) => {
+                            const previewUrl = customerAttachmentPreviewUrls[index] ?? '';
+                            const isActive = index === previewImageIndex;
+                            return (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                onClick={() => setPreviewImageIndex(index)}
+                                className={`h-16 w-16 overflow-hidden rounded border ${isActive ? 'ring-2 ring-primary ring-offset-2' : 'opacity-80 hover:opacity-100'
+                                  }`}
+                              >
+                                {previewUrl ? (
+                                  <img
+                                    src={previewUrl}
+                                    alt={attachment.fileName}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center px-1 text-[10px] text-muted-foreground">
+                                    Xem ảnh
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {activeCustomerAttachment && (
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAttachment(activeCustomerAttachment)}
+                            >
+                              Mở file gốc
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+                        Không có chứng từ đính kèm
                       </div>
                     )}
-                  </>
-                ) : (
-                  <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-                    Không có chứng từ đính kèm
                   </div>
-                )}
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-xs uppercase text-muted-foreground">Khách hàng</p>
-                  <p className="font-medium text-gray-900">{previewAdvance.customerName}</p>
-                  <p className="text-muted-foreground">{previewAdvance.customerPhone}</p>
-                </div>
-                {previewAdvance.tripId && (
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Chuyến liên quan</p>
-                    <p className="font-medium">#{previewAdvance.tripId}</p>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 gap-2">
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Số tiền</p>
-                    <p className="font-semibold text-gray-900">{previewAdvance.amount.toLocaleString('vi-VN')} ₫</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Hình thức</p>
-                    <p className="font-medium">{previewAdvance.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Trạng thái hiện tại</p>
-                    <Badge variant={customerStatusVariants[previewAdvance.status]}>
-                      {customerStatusLabels[previewAdvance.status]}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Ngày nhận</p>
-                    <p>{formatDateTime(previewAdvance.collectedAt)}</p>
-                  </div>
-                  {previewAdvance.receiptCode && (
+                  <div className="space-y-3 text-sm">
                     <div>
-                      <p className="text-xs uppercase text-muted-foreground">Mã phiếu/biên lai</p>
-                      <p className="font-medium">{previewAdvance.receiptCode}</p>
+                      <p className="text-xs uppercase text-muted-foreground">Khách hàng</p>
+                      <p className="font-medium text-gray-900">{previewAdvance.customerName}</p>
+                      <p className="text-muted-foreground">{previewAdvance.customerPhone}</p>
                     </div>
-                  )}
-                </div>
-                {previewAdvance.note && (
-                  <div>
-                    <p className="text-xs uppercase text-muted-foreground">Ghi chú hiện tại</p>
-                    <p>{previewAdvance.note}</p>
+                    {previewAdvance.tripId && (
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Chuyến liên quan</p>
+                        <p className="font-medium">#{previewAdvance.tripId}</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 gap-2">
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Số tiền</p>
+                        <p className="font-semibold text-gray-900">{previewAdvance.amount.toLocaleString('vi-VN')} ₫</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Hình thức</p>
+                        <p className="font-medium">{previewAdvance.method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Trạng thái hiện tại</p>
+                        <Badge variant={customerStatusVariants[previewAdvance.status]}>
+                          {customerStatusLabels[previewAdvance.status]}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Ngày nhận</p>
+                        <p>{formatDateTime(previewAdvance.collectedAt)}</p>
+                      </div>
+                      {previewAdvance.receiptCode && (
+                        <div>
+                          <p className="text-xs uppercase text-muted-foreground">Mã phiếu/biên lai</p>
+                          <p className="font-medium">{previewAdvance.receiptCode}</p>
+                        </div>
+                      )}
+                    </div>
+                    {previewAdvance.note && (
+                      <div>
+                        <p className="text-xs uppercase text-muted-foreground">Ghi chú hiện tại</p>
+                        <p>{previewAdvance.note}</p>
+                      </div>
+                    )}
+                    {isApprovalMode && (
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase text-muted-foreground">
+                          {previewAction === 'rejected' ? 'Lý do từ chối *' : 'Ghi chú phê duyệt (tuỳ chọn)'}
+                        </p>
+                        <Textarea
+                          value={approvalNote}
+                          onChange={(event) => setApprovalNote(event.target.value)}
+                          placeholder={previewAction === 'rejected' ? 'Nhập lý do từ chối phiếu' : 'Thêm ghi chú cho phiếu'}
+                          rows={4}
+                          disabled={customerAdvanceStatusMut.isPending}
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-                {isApprovalMode && (
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase text-muted-foreground">
-                      {previewAction === 'rejected' ? 'Lý do từ chối *' : 'Ghi chú phê duyệt (tuỳ chọn)'}
-                    </p>
-                    <Textarea
-                      value={approvalNote}
-                      onChange={(event) => setApprovalNote(event.target.value)}
-                      placeholder={previewAction === 'rejected' ? 'Nhập lý do từ chối phiếu' : 'Thêm ghi chú cho phiếu'}
-                      rows={4}
-                      disabled={customerAdvanceStatusMut.isPending}
-                    />
-                  </div>
-                )}
-              </div>
                 </div>
               )}
               <DialogFooter className="gap-2">
