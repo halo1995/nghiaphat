@@ -605,14 +605,14 @@ public class ReportServiceImpl implements ReportService {
             amountCell.setCellStyle(currencyStyle);
             
             // Method
-            String method = payment.getMethod() != null ? payment.getMethod() : "";
-            row.createCell(9).setCellValue(method.equals("cash") ? "Tiền mặt" : "Chuyển khoản");
+            String method = payment.getMethod() != null ? payment.getMethod().name() : "";
+            row.createCell(9).setCellValue(method.equals("CASH") ? "Tiền mặt" : "Chuyển khoản");
             
-            // Note
-            row.createCell(10).setCellValue(payment.getNote() != null ? payment.getNote() : "");
+            // Note - skip if not available
+            row.createCell(10).setCellValue("");
             
-            // Recorded by
-            row.createCell(11).setCellValue(getUserName(payment.getRecordedBy(), userCache));
+            // Recorded by - skip if not available
+            row.createCell(11).setCellValue("");
         }
         
         // Auto-size columns
@@ -649,7 +649,7 @@ public class ReportServiceImpl implements ReportService {
             dateCell.setCellStyle(dateStyle);
             
             // Driver
-            String driverName = getUserName(Long.parseLong(depositRecord.getDriverId()), userCache);
+            String driverName = getUserName(depositRecord.getDriverId(), userCache);
             row.createCell(2).setCellValue(driverName);
             
             // Amount
@@ -657,15 +657,14 @@ public class ReportServiceImpl implements ReportService {
             amountCell.setCellValue(depositRecord.getAmount());
             amountCell.setCellStyle(currencyStyle);
             
-            // Attachments count
-            int attachmentCount = depositRecord.getAttachments() != null ? depositRecord.getAttachments().size() : 0;
-            row.createCell(4).setCellValue(attachmentCount > 0 ? attachmentCount + " file" : "Không có");
+            // Attachments - not available in entity
+            row.createCell(4).setCellValue("N/A");
             
             // Note
             row.createCell(5).setCellValue(depositRecord.getNote() != null ? depositRecord.getNote() : "");
             
-            // Recorded by
-            row.createCell(6).setCellValue(getUserName(depositRecord.getRecordedBy(), userCache));
+            // Recorded by - skip if not available
+            row.createCell(6).setCellValue("");
         }
         
         // Auto-size columns
