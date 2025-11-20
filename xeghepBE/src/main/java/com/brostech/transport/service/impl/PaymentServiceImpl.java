@@ -307,6 +307,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (req.getTripId() != null) {
             Trip trip = tripRepository.findById(req.getTripId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+            
+            if (trip.getStatus() == Trip.TripStatus.DA_HUY) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tạo phiếu ứng trước cho chuyến đã hủy");
+            }
+
             if (trip.getDriverId() != null && !Objects.equals(trip.getDriverId(), driver.getId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip is not assigned to the driver");
             }

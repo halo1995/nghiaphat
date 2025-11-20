@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { getTrips, updateTrip, deleteTrip, type Trip } from '@/data/trips';
-import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock, Wallet } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock, Wallet, MoreHorizontal, FileText, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { getProvinces, getWards, type ProvinceOption, type WardOption } from '@/data/locations';
@@ -891,234 +892,170 @@ const CallCenter = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
                   >
-                    <Card className="hover:shadow-lg transition-shadow">
-                      <CardContent className="p-6 space-y-4">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                              <Phone size={18} className="text-green-600" />
-                              {trip.customerName}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">{trip.customerPhone}</p>
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[trip.status]}`}>
-                            {trip.status}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="flex-1 space-y-4">
-                            <div className="space-y-2">
-                              <div className="flex items-start gap-2">
-                                <MapPin className="text-green-600 mt-1 flex-shrink-0" size={16} />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700">Điểm đón</p>
-                                  <p className="text-sm text-gray-600">{trip.pickupLocation}</p>
-                                </div>
+                    <Card className={`hover:shadow-md transition-shadow border-l-4 ${trip.status === 'Hoàn thành' ? 'border-l-green-500' :
+                      trip.status === 'Đã hủy' ? 'border-l-gray-400' :
+                        trip.status === 'Đang đi' ? 'border-l-blue-500' :
+                          trip.status === 'Đang đón' ? 'border-l-yellow-500' :
+                            'border-l-orange-500'
+                      }`}>
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                          {/* Left Column: Info (Cols 1-8) */}
+                          <div className="lg:col-span-8 space-y-3">
+                            {/* Header: Name - Phone - Status */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-base text-gray-800 flex items-center gap-2">
+                                  {trip.customerName}
+                                </h3>
+                                <a href={`tel:${trip.customerPhone}`} className="text-muted-foreground text-sm hover:text-green-600 flex items-center gap-1">
+                                  <Phone size={12} /> {trip.customerPhone}
+                                </a>
                               </div>
+                              <Badge variant="outline" className={`${statusColors[trip.status]} border-0`}>
+                                {trip.status}
+                              </Badge>
+                            </div>
+
+                            {/* Locations: Compact Timeline */}
+                            <div className="flex flex-col gap-1 text-sm">
                               <div className="flex items-start gap-2">
-                                <MapPin className="text-red-600 mt-1 flex-shrink-0" size={16} />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-700">Điểm trả</p>
-                                  <p className="text-sm text-gray-600">{trip.dropoffLocation}</p>
-                                </div>
+                                <MapPin size={14} className="text-green-600 mt-0.5 flex-shrink-0" />
+                                <span className="font-medium text-gray-700">{trip.pickupLocation}</span>
+                              </div>
+                              {/* Connector line */}
+                              <div className="pl-1.5 py-0.5 ml-[6px] border-l-2 border-dashed border-gray-200 h-2"></div>
+                              <div className="flex items-start gap-2">
+                                <MapPin size={14} className="text-red-600 mt-0.5 flex-shrink-0" />
+                                <span className="font-medium text-gray-700">{trip.dropoffLocation}</span>
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                            {/* Meta Row: Time | Pax | Vehicle | Notes */}
+                            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
-                                <CalendarIcon size={14} />
-                                {new Date(trip.pickupTime).toLocaleString('vi-VN')}
+                                <CalendarIcon size={12} />
+                                {new Date(trip.pickupTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                               </span>
-                              {trip.fullVehicle ? (
-                                <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              <span className="flex items-center gap-1">
+                                <Users size={12} />
+                                {trip.passengers} khách
+                              </span>
+                              {trip.fullVehicle && (
+                                <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
                                   Bao xe
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1">
-                                  <Users size={14} />
-                                  {trip.passengers} người
+                                </Badge>
+                              )}
+                              {trip.notes && (
+                                <span className="flex items-center gap-1 max-w-[200px] truncate" title={trip.notes}>
+                                  <FileText size={12} /> {trip.notes}
                                 </span>
                               )}
                             </div>
+                          </div>
 
-                            {advancesForTrip.length > 0 ? (
-                              <div className="pt-3 border-t space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-700">Ứng trước của khách</p>
-                                    {hasAwaitingReconcile && (
-                                      <p className="text-xs text-amber-600 mt-0.5">
-                                        Chờ đối soát {formatCurrency(totalPending)}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <p className="text-sm font-semibold text-emerald-600">
-                                    {formatCurrency(totalAdvance)}
-                                  </p>
-                                </div>
-                                <div className="space-y-2">
-                                  {advancesForTrip.map((advance) => (
-                                    <div key={advance.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                      <div className="text-sm text-gray-600">
-                                        <p className="font-medium text-gray-700">
-                                          {methodLabels[advance.method]}
-                                        </p>
-                                        <p>{formatDateTime(advance.collectedAt)}</p>
-                                        {advance.note && (
-                                          <p className="text-xs text-muted-foreground mt-0.5">{advance.note}</p>
-                                        )}
-                                        {advance.attachments.length > 0 && (
-                                          <div className="mt-1 flex flex-col gap-1">
-                                            {advance.attachments.map((attachment) => (
-                                              <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
-                                                <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                                  {attachment.fileName}
-                                                </a>
-                                              </Button>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-3 justify-between sm:justify-end">
-                                        <Badge variant={customerAdvanceStatusVariants[advance.status]}>
-                                          {customerAdvanceStatusLabels[advance.status]}
-                                        </Badge>
-                                        <span className="text-sm font-semibold text-gray-800">
-                                          {formatCurrency(advance.amount)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (totalAdvance > 0 && (
-                              <div className="pt-3 border-t text-sm text-gray-600">
-                                <p className="font-medium text-gray-700 mb-1">Ứng trước của khách</p>
-                                <p className="text-emerald-600">Tổng ứng: {formatCurrency(totalAdvance)}</p>
+                          {/* Right Column: Finance & Actions (Cols 9-12) */}
+                          <div className="lg:col-span-4 flex flex-col justify-between gap-3 border-t lg:border-t-0 lg:border-l pt-3 lg:pt-0 lg:pl-4">
+                            {/* Financials */}
+                            <div className="flex justify-between items-center lg:flex-col lg:items-end">
+                              <span className="text-lg font-bold text-green-600">{formatCurrency(trip.price)}</span>
+                              <div className="flex flex-col items-end text-xs gap-0.5">
+                                {outstandingAmount > 0 ? (
+                                  <span className="text-orange-600 font-medium">Thu: {formatCurrency(outstandingAmount)}</span>
+                                ) : (
+                                  <span className="text-gray-500 flex items-center gap-1"><CheckCircle size={10} /> Đã thu đủ</span>
+                                )}
                                 {hasAwaitingReconcile && (
-                                  <p className="text-xs text-amber-600 mt-1">
-                                    Chờ đối soát {formatCurrency(totalPending)}
-                                  </p>
+                                  <span className="text-amber-600">Chờ đối soát: {formatCurrency(totalPending)}</span>
                                 )}
                               </div>
-                            ))}
-
-                            {trip.notes && (
-                              <div className="pt-2 border-t">
-                                <p className="text-sm text-gray-600">
-                                  <span className="font-medium">Ghi chú:</span> {trip.notes}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="w-full lg:w-64 space-y-3">
-                            <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm text-gray-700">
-                              <div className="flex items-center justify-between">
-                                <span>Giá cước</span>
-                                <span className="text-base font-semibold text-green-600">
-                                  {formatCurrency(trip.price)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span>Đã đối soát</span>
-                                <span className="font-medium text-emerald-600">
-                                  {formatCurrency(totalReconciled)}
-                                </span>
-                              </div>
-                              {hasAwaitingReconcile && (
-                                <div className="flex items-center justify-between text-amber-600">
-                                  <span>Chờ đối soát</span>
-                                  <span>{formatCurrency(totalPending)}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span>Cần thu khách</span>
-                                <span className={`font-semibold ${outstandingAmount > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
-                                  {outstandingAmount > 0
-                                    ? formatCurrency(outstandingAmount)
-                                    : 'Đã thu đủ'}
-                                </span>
-                              </div>
                             </div>
 
-                            {allowCustomerFinance && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="w-full"
-                                onClick={() => {
-                                  setSelectedTripForAdvance(trip);
-                                  setCustomerAdvanceForm({
-                                    tripId: String(trip.id ?? ''),
-                                    customerName: trip.customerName,
-                                    customerPhone: trip.customerPhone,
-                                    amount: '',
-                                    method: 'cash',
-                                    receiptCode: '',
-                                    note: '',
-                                  });
-                                  setFinanceDialogOpen(true);
-                                }}
-                              >
-                                Ghi nhận ứng trước
-                              </Button>
-                            )}
-
-                            <div className="space-y-2">
-                              {trip.status === 'Chờ xác nhận' && (
-                                <div className="flex flex-col gap-2">
-                                  <Button
-                                    onClick={() => handleConfirm(trip.id)}
-                                    className="w-full gap-2 bg-green-600 hover:bg-green-700"
-                                    size="sm"
-                                  >
-                                    <CheckCircle size={16} />
-                                    Xác nhận
-                                  </Button>
-                                  <Button
-                                    onClick={() => handleCancel(trip.id)}
-                                    variant="destructive"
-                                    className="w-full gap-2"
-                                    size="sm"
-                                  >
-                                    <XCircle size={16} />
-                                    Hủy
-                                  </Button>
-                                </div>
-                              )}
-
-                              {trip.status === 'Đã xác nhận' && (
+                            {/* Actions Row */}
+                            <div className="flex items-center justify-end gap-2 mt-auto">
+                              {/* Primary Action based on Status */}
+                              {trip.status === 'Chờ xác nhận' ? (
                                 <Button
-                                  onClick={() => handleCancel(trip.id)}
-                                  variant="outline"
-                                  className="w-full gap-2"
                                   size="sm"
+                                  className="h-8 text-xs bg-green-600 hover:bg-green-700 gap-1"
+                                  onClick={() => handleConfirm(trip.id)}
                                 >
-                                  <XCircle size={16} />
-                                  Hủy chuyến
+                                  <CheckCircle size={12} /> Xác nhận
                                 </Button>
+                              ) : (
+                                allowCustomerFinance && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 text-xs gap-1"
+                                    disabled={trip.status === 'Đã hủy'}
+                                    onClick={() => {
+                                      setSelectedTripForAdvance(trip);
+                                      setCustomerAdvanceForm({
+                                        tripId: String(trip.id ?? ''),
+                                        customerName: trip.customerName,
+                                        customerPhone: trip.customerPhone,
+                                        amount: '',
+                                        method: 'cash',
+                                        receiptCode: '',
+                                        note: '',
+                                      });
+                                      setFinanceDialogOpen(true);
+                                    }}
+                                  >
+                                    <Wallet size={12} /> Ứng trước
+                                  </Button>
+                                )
                               )}
 
-                              <Button
-                                onClick={() => handleOpenSchedule(trip)}
-                                variant="secondary"
-                                className="w-full gap-2"
-                                size="sm"
-                                disabled={!isEditable}
-                                title={
-                                  !isEditable
-                                    ? 'Không thể chỉnh sửa khi chuyến đang đón, đang đi, đã hoàn thành hoặc đã hủy'
-                                    : undefined
-                                }
-                              >
-                                <Clock size={16} />
-                                Chỉnh sửa lịch
-                              </Button>
+                              {/* More Actions Menu */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal size={16} />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handleOpenSchedule(trip)} disabled={!isEditable}>
+                                    <Clock className="mr-2 h-4 w-4" /> Sửa lịch
+                                  </DropdownMenuItem>
+                                  {trip.status === 'Chờ xác nhận' && (
+                                    <DropdownMenuItem onClick={() => handleCancel(trip.id)} className="text-red-600">
+                                      <XCircle className="mr-2 h-4 w-4" /> Hủy yêu cầu
+                                    </DropdownMenuItem>
+                                  )}
+                                  {trip.status === 'Đã xác nhận' && (
+                                    <DropdownMenuItem onClick={() => handleCancel(trip.id)} className="text-red-600">
+                                      <XCircle className="mr-2 h-4 w-4" /> Hủy chuyến
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                         </div>
+
+                        {/* Advance Payment List (Compact) */}
+                        {advancesForTrip.length > 0 && (
+                          <div className="mt-3 pt-2 border-t bg-gray-50/50 -mx-4 -mb-4 px-4 py-2 text-xs">
+                            <div className="space-y-1">
+                              {advancesForTrip.map((advance) => (
+                                <div key={advance.id} className="flex items-center justify-between text-gray-600">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={customerAdvanceStatusVariants[advance.status]} className="text-[10px] h-4 px-1">
+                                      {customerAdvanceStatusLabels[advance.status]}
+                                    </Badge>
+                                    <span>{methodLabels[advance.method]}</span>
+                                    <span className="text-muted-foreground">
+                                      {format(new Date(advance.collectedAt), 'HH:mm dd/MM')}
+                                    </span>
+                                  </div>
+                                  <span className="font-medium">{formatCurrency(advance.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   </motion.div>
