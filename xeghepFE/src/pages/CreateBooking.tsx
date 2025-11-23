@@ -283,6 +283,21 @@ const CreateBooking = () => {
   const pickupDate = parseLocalDateTime(formData.pickupTime);
   const pickupTimeValue = pickupDate ? format(pickupDate, 'HH:mm') : '';
 
+  const vietnameseFilter = (value: string, search: string) => {
+    const normalize = (str: string) => {
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .trim();
+    };
+    const s = normalize(search);
+    const v = normalize(value);
+    return v.includes(s) ? 1 : 0;
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -447,7 +462,7 @@ const CreateBooking = () => {
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[400px] p-0" align="start">
-                            <Command>
+                            <Command filter={vietnameseFilter}>
                               <CommandInput
                                 placeholder="Tìm kiếm phường/xã, quận/huyện..."
                               />
@@ -462,7 +477,6 @@ const CreateBooking = () => {
                                         <CommandItem
                                           key={option.code}
                                           value={displayText}
-                                          keywords={[option.name, option.district?.name || '']}
                                           onSelect={() => {
                                             handlePickupWardChange(option.code);
                                             setPickupWardOpen(false);
@@ -521,7 +535,7 @@ const CreateBooking = () => {
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[400px] p-0" align="start">
-                            <Command>
+                            <Command filter={vietnameseFilter}>
                               <CommandInput placeholder="Tìm kiếm phường/xã, quận/huyện..." />
                               <CommandList>
                                 <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
@@ -534,7 +548,6 @@ const CreateBooking = () => {
                                         <CommandItem
                                           key={option.code}
                                           value={displayText}
-                                          keywords={[option.name, option.district?.name || '']}
                                           onSelect={() => {
                                             handleDropoffWardChange(option.code);
                                             setDropoffWardOpen(false);
