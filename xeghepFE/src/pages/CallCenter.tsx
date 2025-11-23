@@ -814,79 +814,86 @@ const CallCenter = () => {
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                  <Input
-                    type="text"
-                    placeholder="Tìm khách hàng, SĐT..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+              <div className="space-y-4">
+                {/* Row 1: Search & Location Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Input
+                      type="text"
+                      placeholder="Tìm khách hàng, SĐT..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600" size={18} />
+                    <Input
+                      type="text"
+                      placeholder="Điểm đi..."
+                      value={pickupLocationFilter}
+                      onChange={(e) => setPickupLocationFilter(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-600" size={18} />
+                    <Input
+                      type="text"
+                      placeholder="Điểm đến..."
+                      value={dropoffLocationFilter}
+                      onChange={(e) => setDropoffLocationFilter(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600" size={20} />
-                  <Input
-                    type="text"
-                    placeholder="Điểm đi..."
-                    value={pickupLocationFilter}
-                    onChange={(e) => setPickupLocationFilter(e.target.value)}
-                    className="pl-10"
+
+                {/* Row 2: Status, Date & Time Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Trạng thái" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                      <SelectItem value="Chờ xác nhận">Chờ xác nhận</SelectItem>
+                      <SelectItem value="Đã xác nhận">Đã xác nhận</SelectItem>
+                      <SelectItem value="Đã hủy">Đã hủy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <DatePickerField
+                    value={dateFilter}
+                    onChange={(value) => {
+                      setDateFilter(value);
+                      queryClient.invalidateQueries({ queryKey: ['trips'] });
+                    }}
+                    allowClear
+                    placeholder="Ngày đón"
                   />
+                  <Select value={pickupTimeRange} onValueChange={(value) => setPickupTimeRange(value as typeof pickupTimeRange)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Khung giờ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả khung giờ</SelectItem>
+                      <SelectItem value="morning">Sáng (06:00 - 11:59)</SelectItem>
+                      <SelectItem value="afternoon">Chiều (12:00 - 17:59)</SelectItem>
+                      <SelectItem value="evening">Tối (18:00 - 23:59)</SelectItem>
+                      <SelectItem value="night">Đêm (00:00 - 05:59)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={pickupTimeOrder} onValueChange={(value) => setPickupTimeOrder(value as 'none' | 'soonest' | 'latest')}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sắp xếp" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Mặc định</SelectItem>
+                      <SelectItem value="soonest">Sớm nhất</SelectItem>
+                      <SelectItem value="latest">Muộn nhất</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-600" size={20} />
-                  <Input
-                    type="text"
-                    placeholder="Điểm đến..."
-                    value={dropoffLocationFilter}
-                    onChange={(e) => setDropoffLocationFilter(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Lọc trạng thái" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="Chờ xác nhận">Chờ xác nhận</SelectItem>
-                    <SelectItem value="Đã xác nhận">Đã xác nhận</SelectItem>
-                    <SelectItem value="Đã hủy">Đã hủy</SelectItem>
-                  </SelectContent>
-                </Select>
-                <DatePickerField
-                  value={dateFilter}
-                  onChange={(value) => {
-                    setDateFilter(value);
-                    queryClient.invalidateQueries({ queryKey: ['trips'] });
-                  }}
-                  allowClear
-                  placeholder="Lọc theo ngày"
-                />
-                <Select value={pickupTimeRange} onValueChange={(value) => setPickupTimeRange(value as typeof pickupTimeRange)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Khung giờ đón" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả khung giờ</SelectItem>
-                    <SelectItem value="morning">Sáng (06:00 - 11:59)</SelectItem>
-                    <SelectItem value="afternoon">Chiều (12:00 - 17:59)</SelectItem>
-                    <SelectItem value="evening">Tối (18:00 - 23:59)</SelectItem>
-                    <SelectItem value="night">Đêm (00:00 - 05:59)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={pickupTimeOrder} onValueChange={(value) => setPickupTimeOrder(value as 'none' | 'soonest' | 'latest')}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sắp xếp thời gian đón" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Mặc định</SelectItem>
-                    <SelectItem value="soonest">Giờ đón sớm → muộn</SelectItem>
-                    <SelectItem value="latest">Giờ đón muộn → sớm</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </CardContent>
           </Card>

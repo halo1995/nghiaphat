@@ -67,8 +67,6 @@ const CreateBooking = () => {
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
   const [pickupWardOpen, setPickupWardOpen] = useState(false);
   const [dropoffWardOpen, setDropoffWardOpen] = useState(false);
-  const [pickupWardSearch, setPickupWardSearch] = useState('');
-  const [dropoffWardSearch, setDropoffWardSearch] = useState('');
 
   const provinceOptions = useMemo(() => getProvinces(), []);
   const pickupProvinceCode = pickupSelection.province?.code;
@@ -82,24 +80,6 @@ const CreateBooking = () => {
     () => (dropoffProvinceCode ? getWards(dropoffProvinceCode) : []),
     [dropoffProvinceCode]
   );
-
-  const filteredPickupWards = useMemo(() => {
-    if (!pickupWardSearch) return pickupWardOptions;
-    const search = pickupWardSearch.toLowerCase();
-    return pickupWardOptions.filter(ward =>
-      ward.name.toLowerCase().includes(search) ||
-      ward.district?.name.toLowerCase().includes(search)
-    );
-  }, [pickupWardOptions, pickupWardSearch]);
-
-  const filteredDropoffWards = useMemo(() => {
-    if (!dropoffWardSearch) return dropoffWardOptions;
-    const search = dropoffWardSearch.toLowerCase();
-    return dropoffWardOptions.filter(ward =>
-      ward.name.toLowerCase().includes(search) ||
-      ward.district?.name.toLowerCase().includes(search)
-    );
-  }, [dropoffWardOptions, dropoffWardSearch]);
 
   const createMutation = useMutation({
     mutationFn: (data: BookingFormData) =>
@@ -470,34 +450,34 @@ const CreateBooking = () => {
                             <Command>
                               <CommandInput
                                 placeholder="Tìm kiếm phường/xã, quận/huyện..."
-                                value={pickupWardSearch}
-                                onValueChange={setPickupWardSearch}
                               />
                               <CommandList>
                                 <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
                                 <CommandGroup>
-                                  {filteredPickupWards
+                                  {pickupWardOptions
                                     .filter(option => option.code)
-                                    .map(option => (
-                                      <CommandItem
-                                        key={option.code}
-                                        value={option.code}
-                                        onSelect={() => {
-                                          handlePickupWardChange(option.code);
-                                          setPickupWardOpen(false);
-                                          setPickupWardSearch('');
-                                        }}
-                                      >
-                                        <Check
-                                          className={`mr-2 h-4 w-4 ${pickupSelection.ward?.code === option.code
-                                            ? 'opacity-100'
-                                            : 'opacity-0'
-                                            }`}
-                                        />
-                                        {option.name}
-                                        {option.district?.name ? ` (${option.district.name})` : ''}
-                                      </CommandItem>
-                                    ))}
+                                    .map(option => {
+                                      const displayText = `${option.name}${option.district?.name ? ` (${option.district.name})` : ''}`;
+                                      return (
+                                        <CommandItem
+                                          key={option.code}
+                                          value={displayText}
+                                          keywords={[option.name, option.district?.name || '']}
+                                          onSelect={() => {
+                                            handlePickupWardChange(option.code);
+                                            setPickupWardOpen(false);
+                                          }}
+                                        >
+                                          <Check
+                                            className={`mr-2 h-4 w-4 ${pickupSelection.ward?.code === option.code
+                                              ? 'opacity-100'
+                                              : 'opacity-0'
+                                              }`}
+                                          />
+                                          {displayText}
+                                        </CommandItem>
+                                      );
+                                    })}
                                 </CommandGroup>
                               </CommandList>
                             </Command>
@@ -542,36 +522,34 @@ const CreateBooking = () => {
                           </PopoverTrigger>
                           <PopoverContent className="w-[400px] p-0" align="start">
                             <Command>
-                              <CommandInput
-                                placeholder="Tìm kiếm phường/xã, quận/huyện..."
-                                value={dropoffWardSearch}
-                                onValueChange={setDropoffWardSearch}
-                              />
+                              <CommandInput placeholder="Tìm kiếm phường/xã, quận/huyện..." />
                               <CommandList>
                                 <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
                                 <CommandGroup>
-                                  {filteredDropoffWards
+                                  {dropoffWardOptions
                                     .filter(option => option.code)
-                                    .map(option => (
-                                      <CommandItem
-                                        key={option.code}
-                                        value={option.code}
-                                        onSelect={() => {
-                                          handleDropoffWardChange(option.code);
-                                          setDropoffWardOpen(false);
-                                          setDropoffWardSearch('');
-                                        }}
-                                      >
-                                        <Check
-                                          className={`mr-2 h-4 w-4 ${dropoffSelection.ward?.code === option.code
-                                            ? 'opacity-100'
-                                            : 'opacity-0'
-                                            }`}
-                                        />
-                                        {option.name}
-                                        {option.district?.name ? ` (${option.district.name})` : ''}
-                                      </CommandItem>
-                                    ))}
+                                    .map(option => {
+                                      const displayText = `${option.name}${option.district?.name ? ` (${option.district.name})` : ''}`;
+                                      return (
+                                        <CommandItem
+                                          key={option.code}
+                                          value={displayText}
+                                          keywords={[option.name, option.district?.name || '']}
+                                          onSelect={() => {
+                                            handleDropoffWardChange(option.code);
+                                            setDropoffWardOpen(false);
+                                          }}
+                                        >
+                                          <Check
+                                            className={`mr-2 h-4 w-4 ${dropoffSelection.ward?.code === option.code
+                                                ? 'opacity-100'
+                                                : 'opacity-0'
+                                              }`}
+                                          />
+                                          {displayText}
+                                        </CommandItem>
+                                      );
+                                    })}
                                 </CommandGroup>
                               </CommandList>
                             </Command>
