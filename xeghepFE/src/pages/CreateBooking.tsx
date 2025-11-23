@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createTrip } from '@/data/trips';
-import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone, Check, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { getProvinces, getWards, formatFullAddress, AddressSelection } from '@/data/locations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -64,6 +65,10 @@ const CreateBooking = () => {
   const [pickupSelection, setPickupSelection] = useState<AddressSelection>({});
   const [dropoffSelection, setDropoffSelection] = useState<AddressSelection>({});
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
+  const [pickupWardOpen, setPickupWardOpen] = useState(false);
+  const [dropoffWardOpen, setDropoffWardOpen] = useState(false);
+  const [pickupWardSearch, setPickupWardSearch] = useState('');
+  const [dropoffWardSearch, setDropoffWardSearch] = useState('');
 
   const provinceOptions = useMemo(() => getProvinces(), []);
   const pickupProvinceCode = pickupSelection.province?.code;
@@ -77,6 +82,24 @@ const CreateBooking = () => {
     () => (dropoffProvinceCode ? getWards(dropoffProvinceCode) : []),
     [dropoffProvinceCode]
   );
+
+  const filteredPickupWards = useMemo(() => {
+    if (!pickupWardSearch) return pickupWardOptions;
+    const search = pickupWardSearch.toLowerCase();
+    return pickupWardOptions.filter(ward =>
+      ward.name.toLowerCase().includes(search) ||
+      ward.district?.name.toLowerCase().includes(search)
+    );
+  }, [pickupWardOptions, pickupWardSearch]);
+
+  const filteredDropoffWards = useMemo(() => {
+    if (!dropoffWardSearch) return dropoffWardOptions;
+    const search = dropoffWardSearch.toLowerCase();
+    return dropoffWardOptions.filter(ward =>
+      ward.name.toLowerCase().includes(search) ||
+      ward.district?.name.toLowerCase().includes(search)
+    );
+  }, [dropoffWardOptions, dropoffWardSearch]);
 
   const createMutation = useMutation({
     mutationFn: (data: BookingFormData) =>
@@ -401,7 +424,7 @@ const CreateBooking = () => {
                           <Label htmlFor="fullVehicle" className={`font-semibold ${formData.fullVehicle ? 'text-green-700' : 'text-gray-800'}`}>
                             Thuê nguyên xe
                           </Label>
-                        
+
                         </div>
                       </div>
                     </div>
@@ -429,25 +452,57 @@ const CreateBooking = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Select
-                          value={pickupSelection.ward?.code ?? ''}
-                          onValueChange={handlePickupWardChange}
-                          disabled={!pickupSelection.province}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn phường/xã" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {pickupWardOptions
-                              .filter(option => option.code)
-                              .map(option => (
-                                <SelectItem key={option.code} value={option.code}>
-                                  {option.name}
-                                  {option.district?.name ? ` (${option.district.name})` : ''}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={pickupWardOpen} onOpenChange={setPickupWardOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={!pickupSelection.province}
+                              className="w-full justify-between"
+                            >
+                              {pickupSelection.ward
+                                ? `${pickupSelection.ward.name}${pickupSelection.district?.name ? ` (${pickupSelection.district.name})` : ''}`
+                                : 'Chọn phường/xã'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Tìm kiếm phường/xã, quận/huyện..."
+                                value={pickupWardSearch}
+                                onValueChange={setPickupWardSearch}
+                              />
+                              <CommandList>
+                                <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
+                                <CommandGroup>
+                                  {filteredPickupWards
+                                    .filter(option => option.code)
+                                    .map(option => (
+                                      <CommandItem
+                                        key={option.code}
+                                        value={option.code}
+                                        onSelect={() => {
+                                          handlePickupWardChange(option.code);
+                                          setPickupWardOpen(false);
+                                          setPickupWardSearch('');
+                                        }}
+                                      >
+                                        <Check
+                                          className={`mr-2 h-4 w-4 ${pickupSelection.ward?.code === option.code
+                                            ? 'opacity-100'
+                                            : 'opacity-0'
+                                            }`}
+                                        />
+                                        {option.name}
+                                        {option.district?.name ? ` (${option.district.name})` : ''}
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <Input
                         value={formData.pickupLocation}
@@ -471,25 +526,57 @@ const CreateBooking = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Select
-                          value={dropoffSelection.ward?.code ?? ''}
-                          onValueChange={handleDropoffWardChange}
-                          disabled={!dropoffSelection.province}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn phường/xã" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {dropoffWardOptions
-                              .filter(option => option.code)
-                              .map(option => (
-                                <SelectItem key={option.code} value={option.code}>
-                                  {option.name}
-                                  {option.district?.name ? ` (${option.district.name})` : ''}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={dropoffWardOpen} onOpenChange={setDropoffWardOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={!dropoffSelection.province}
+                              className="w-full justify-between"
+                            >
+                              {dropoffSelection.ward
+                                ? `${dropoffSelection.ward.name}${dropoffSelection.district?.name ? ` (${dropoffSelection.district.name})` : ''}`
+                                : 'Chọn phường/xã'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[400px] p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Tìm kiếm phường/xã, quận/huyện..."
+                                value={dropoffWardSearch}
+                                onValueChange={setDropoffWardSearch}
+                              />
+                              <CommandList>
+                                <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
+                                <CommandGroup>
+                                  {filteredDropoffWards
+                                    .filter(option => option.code)
+                                    .map(option => (
+                                      <CommandItem
+                                        key={option.code}
+                                        value={option.code}
+                                        onSelect={() => {
+                                          handleDropoffWardChange(option.code);
+                                          setDropoffWardOpen(false);
+                                          setDropoffWardSearch('');
+                                        }}
+                                      >
+                                        <Check
+                                          className={`mr-2 h-4 w-4 ${dropoffSelection.ward?.code === option.code
+                                            ? 'opacity-100'
+                                            : 'opacity-0'
+                                            }`}
+                                        />
+                                        {option.name}
+                                        {option.district?.name ? ` (${option.district.name})` : ''}
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <Input
                         value={formData.dropoffLocation}
@@ -547,7 +634,7 @@ const CreateBooking = () => {
                           min="0"
                           step="0.1"
                           value={formData.distance}
-                        onChange={(e) => handleChange('distance', Number.isNaN(parseFloat(e.target.value)) ? 0 : parseFloat(e.target.value))}
+                          onChange={(e) => handleChange('distance', Number.isNaN(parseFloat(e.target.value)) ? 0 : parseFloat(e.target.value))}
                           required
                         />
                       </div>
@@ -582,9 +669,9 @@ const CreateBooking = () => {
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                  <Button 
-                    type="submit" 
-                    className="flex-1 gap-2 bg-green-600 hover:bg-green-700" 
+                  <Button
+                    type="submit"
+                    className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
                     disabled={createMutation.isPending}
                   >
                     <Plus size={20} />
@@ -598,8 +685,8 @@ const CreateBooking = () => {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </main >
+    </div >
   );
 };
 

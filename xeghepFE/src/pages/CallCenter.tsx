@@ -68,6 +68,8 @@ const CallCenter = () => {
   const [dateFilter, setDateFilter] = useState(() => getTodayLocalDate());
   const [pickupTimeOrder, setPickupTimeOrder] = useState<'none' | 'soonest' | 'latest'>('none');
   const [pickupTimeRange, setPickupTimeRange] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
+  const [pickupLocationFilter, setPickupLocationFilter] = useState('');
+  const [dropoffLocationFilter, setDropoffLocationFilter] = useState('');
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [scheduleForm, setScheduleForm] = useState({
     pickupLocation: '',
@@ -460,6 +462,9 @@ const CallCenter = () => {
 
   const filteredTrips = useMemo(() => {
     const normalizedSearch = searchTerm.toLowerCase();
+    const normalizedPickupLocation = pickupLocationFilter.toLowerCase();
+    const normalizedDropoffLocation = dropoffLocationFilter.toLowerCase();
+
     const base = trips.filter(trip => {
       const matchesSearch =
         trip.customerName.toLowerCase().includes(normalizedSearch) ||
@@ -468,6 +473,13 @@ const CallCenter = () => {
 
       const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
       const matchesDate = !dateFilter || trip.pickupTime.startsWith(dateFilter);
+
+      const matchesPickupLocation = !pickupLocationFilter ||
+        trip.pickupLocation.toLowerCase().includes(normalizedPickupLocation);
+
+      const matchesDropoffLocation = !dropoffLocationFilter ||
+        trip.dropoffLocation.toLowerCase().includes(normalizedDropoffLocation);
+
       const matchesTime = (() => {
         if (pickupTimeRange === 'all') return true;
         if (!trip.pickupTime) return false;
@@ -486,7 +498,8 @@ const CallCenter = () => {
         }
       })();
 
-      return matchesSearch && matchesStatus && matchesDate && matchesTime;
+      return matchesSearch && matchesStatus && matchesDate && matchesTime &&
+        matchesPickupLocation && matchesDropoffLocation;
     });
 
     if (pickupTimeOrder === 'soonest') {
@@ -506,7 +519,7 @@ const CallCenter = () => {
     }
 
     return base;
-  }, [trips, searchTerm, statusFilter, dateFilter, pickupTimeRange, pickupTimeOrder]);
+  }, [trips, searchTerm, statusFilter, dateFilter, pickupTimeRange, pickupTimeOrder, pickupLocationFilter, dropoffLocationFilter]);
 
   const statusColors: Record<string, string> = {
     'Chờ xác nhận': 'bg-orange-100 text-orange-700 border-orange-200',
@@ -801,14 +814,34 @@ const CallCenter = () => {
           {/* Filters */}
           <Card>
             <CardContent className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                   <Input
                     type="text"
-                    placeholder="Tìm khách hàng, SĐT, địa điểm..."
+                    placeholder="Tìm khách hàng, SĐT..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-green-600" size={20} />
+                  <Input
+                    type="text"
+                    placeholder="Điểm đi..."
+                    value={pickupLocationFilter}
+                    onChange={(e) => setPickupLocationFilter(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-red-600" size={20} />
+                  <Input
+                    type="text"
+                    placeholder="Điểm đến..."
+                    value={dropoffLocationFilter}
+                    onChange={(e) => setDropoffLocationFilter(e.target.value)}
                     className="pl-10"
                   />
                 </div>
