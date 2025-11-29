@@ -16,6 +16,8 @@ import type {
   DriverExpenseAdvanceStatusUpdateRequest as ApiDriverExpenseAdvanceStatusUpdateRequest,
   DriverExpenseStatus as ApiDriverExpenseStatus,
   DriverExpenseType as ApiDriverExpenseType,
+  DriverDailySummaryResponse,
+  DriverDailyTripSummaryResponse,
 } from '@/services/api';
 
 export const secureAttachmentUrl = (url: string): string => {
@@ -144,6 +146,23 @@ export interface DriverExpenseAdvance {
   rejectionReason?: string;
   note?: string;
   attachments: PaymentAttachment[];
+}
+
+export interface DriverDailyTripSummary {
+  tripId: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  amount: number;
+  status: string;
+  alreadyPaid: number;
+}
+
+export interface DriverDailySummary {
+  driverId: string;
+  driverName: string;
+  date: string;
+  expectedAmount: number;
+  trips: DriverDailyTripSummary[];
 }
 
 const METHOD_TO_FRONT: Record<ApiPaymentMethod, PaymentMethod> = {
@@ -463,3 +482,78 @@ export const updateDriverExpenseAdvanceStatus = async (input: {
   const response = await apiService.updateDriverExpenseAdvanceStatus(Number(input.id), request);
   return mapDriverAdvance(response);
 };
+
+const mapDailyTripSummary = (trip: DriverDailyTripSummaryResponse): DriverDailyTripSummary => ({
+  tripId: trip.tripId.toString(),
+  pickupLocation: trip.pickupLocation,
+  dropoffLocation: trip.dropoffLocation,
+  amount: trip.amount,
+  status: trip.status,
+  alreadyPaid: trip.alreadyPaid,
+});
+
+const mapDailySummary = (summary: DriverDailySummaryResponse): DriverDailySummary => ({
+  driverId: summary.driverId.toString(),
+  driverName: summary.driverName,
+  date: summary.date,
+  expectedAmount: summary.expectedAmount,
+  trips: summary.trips.map(mapDailyTripSummary),
+});
+
+export const getDriverDailySummary = async (
+  driverId: string,
+  date: string
+): Promise<DriverDailySummary> => {
+  try {
+    // Try to call the new API endpoint
+    const response = await apiService.getDriverDailySummary(Number(driverId), date);
+    return mapDailySummary(response);
+  } catch (error) {
+    // Fallback: Calculate from existing trips data
+    // This will be used if backend doesn't have the endpoint yet
+    console.warn('Driver daily summary API not available, using fallback calculation');
+
+    // Get all trips (we'll filter on client side)
+    const tripsResponse = await apiService.getTrips(undefined, 0, 500);
+    const allTrips = tripsResponse.content;
+
+    // Filter trips for this driver and date
+    const targetDate = new Date(date).toISOString().split('T')[0];
+    const driverTrips = allTrips.filter((trip) => {
+      const tripDate = new Date(trip.pickupTime).toISOString().split('T')[0];
+      const isCompleted = trip.status === 'HOAN_THANH';
+      const isDriverMatch = trip.driverId?.toString() === driverId;
+      const isDateMatch = tripDate === targetDate;
+      return isCompleted && isDriverMatch && isDateMatch;
+    });
+
+    // Calculate expected amount and map trips
+    const trips: DriverDailyTripSummary[] = driverTrips.map((trip) => {
+      // Số tiền tài xế cần nộp = giá chuyến - số tiền ứng trước đã đối soát
+      // Nếu backend trả về customerOutstandingAmount thì dùng, nếu không thì tính
+      const outstandingAmount = trip.customerOutstandingAmount ??
+        (trip.price - (trip.customerAdvanceReconciled ?? 0));
+
+      return {
+        tripId: trip.id.toString(),
+        pickupLocation: trip.pickupLocation,
+        dropoffLocation: trip.dropoffLocation,
+        amount: outstandingAmount, // Số tiền thực tế cần nộp, không phải tổng giá chuyến
+        status: trip.status,
+        alreadyPaid: 0, // Would need payment data to calculate this accurately
+      };
+    });
+
+    const expectedAmount = trips.reduce((sum, trip) => sum + trip.amount, 0);
+    const driverName = driverTrips[0]?.driverName || 'Unknown Driver';
+
+    return {
+      driverId,
+      driverName,
+      date,
+      expectedAmount,
+      trips,
+    };
+  }
+};
+

@@ -6,7 +6,7 @@ const detectDefaultBaseUrl = () => {
     if (origin.includes('localhost:3000') || origin.includes('127.0.0.1:3000')) {
       return 'http://localhost:8080/transport-service';
     }
-    return origin + '/transport-service';   ;
+    return origin + '/transport-service';;
   }
   return 'http://localhost:8080/transport-service';
 };
@@ -492,4 +492,21 @@ export interface CustomerRequest {
   address?: string | null;
   avatar?: string | null;
   status?: CustomerStatus;
+}
+
+export interface DriverDailyTripSummaryResponse {
+  tripId: number;
+  pickupLocation: string;
+  dropoffLocation: string;
+  amount: number;
+  status: string;
+  alreadyPaid: number;
+}
+
+export interface DriverDailySummaryResponse {
+  driverId: number;
+  driverName: string;
+  date: string;
+  expectedAmount: number;
+  trips: DriverDailyTripSummaryResponse[];
 }

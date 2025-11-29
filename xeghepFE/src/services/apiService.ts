@@ -33,6 +33,7 @@ import {
   ExpenseVoucherStatusUpdatePayload,
   ExpenseVoucherHistoryResponse,
   ExpenseSummaryResponse,
+  DriverDailySummaryResponse,
 } from './api';
 
 class ApiService {
@@ -461,6 +462,15 @@ class ApiService {
     return this.handleResponse<AccountingSummaryResponse>(response);
   }
 
+  async getDriverDailySummary(driverId: number, date: string): Promise<DriverDailySummaryResponse> {
+    const params = new URLSearchParams({ date });
+    const response = await fetch(
+      `${this.buildUrl(`/drivers/${driverId}/daily-summary`)}?${params}`,
+      { headers: this.getAuthHeaders() }
+    );
+    return this.handleResponse<DriverDailySummaryResponse>(response);
+  }
+
   // Expense voucher APIs
   async getExpenseVouchers(options: {
     status?: string;
@@ -575,17 +585,17 @@ class ApiService {
     const params = new URLSearchParams();
     if (from) params.append('from', from);
     if (to) params.append('to', to);
-    
+
     const url = this.buildUrl(`/reports/accounting/export${params.toString() ? '?' + params.toString() : ''}`);
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
-    
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Lỗi khi tải báo cáo' }));
       throw new Error(error.message || 'Lỗi khi tải báo cáo');
     }
-    
+
     return response.blob();
   }
 
