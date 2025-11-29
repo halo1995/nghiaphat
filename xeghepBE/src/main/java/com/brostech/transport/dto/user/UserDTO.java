@@ -12,5 +12,4 @@ public class UserDTO {
     private User.UserRole role;
     private String email;
     private String phone;
-    private String avatar;
 }

@@ -34,11 +34,13 @@ import java.util.List;
 
 /**
  * TripServiceImpl
- * Nghiệp vụ: Quản lý chuyến đi (tạo, tìm kiếm theo trạng thái, cập nhật thông tin, xóa).
+ * Nghiệp vụ: Quản lý chuyến đi (tạo, tìm kiếm theo trạng thái, cập nhật thông
+ * tin, xóa).
  * Quy tắc chính:
  * - Quản lý thông tin khách hàng, địa điểm đón/trả, thời gian, giá vé.
  * - Sử dụng vehicleId, driverId thay vì relationships để đơn giản.
- * - Trạng thái chuyến dùng enum TripStatus: CHO_XAC_NHAN/DA_XAC_NHAN/DA_GHEP_CHUYEN/v.v.
+ * - Trạng thái chuyến dùng enum TripStatus:
+ * CHO_XAC_NHAN/DA_XAC_NHAN/DA_GHEP_CHUYEN/v.v.
  * - Hỗ trợ lọc theo trạng thái để màn hình điều phối.
  */
 @Service
@@ -53,7 +55,7 @@ public class TripServiceImpl implements TripService {
     private final PaymentService paymentService;
     private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
     private final TripGroupRepository tripGroupRepository;
-    
+
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     /**
@@ -61,6 +63,7 @@ public class TripServiceImpl implements TripService {
      * - Kiểm tra hợp lệ customer theo id.
      * - Parse các thông tin thời gian từ chuỗi.
      * - Trạng thái mặc định CHO_XAC_NHAN nếu không truyền.
+     * 
      * @param req dữ liệu tạo chuyến
      * @return TripDTO đã lưu
      */
@@ -123,7 +126,7 @@ public class TripServiceImpl implements TripService {
         autoRecordDriverCollection(trip, null);
         return toDTO(trip);
     }
-    
+
     private Date parseDate(String dateString) {
         if (dateString == null || dateString.trim().isEmpty()) {
             return null;
@@ -137,6 +140,7 @@ public class TripServiceImpl implements TripService {
 
     /**
      * Lấy chi tiết Trip theo id.
+     * 
      * @param id id chuyến
      * @return TripDTO; ném 404 nếu không có
      */
@@ -152,22 +156,53 @@ public class TripServiceImpl implements TripService {
      * Tìm kiếm Trip theo trạng thái (phân trang).
      * - Nếu status rỗng: trả tất cả.
      * - Nếu có: parse Trip.TripStatus và lọc.
-     * @param status chuỗi trạng thái
+     * 
+     * @param status   chuỗi trạng thái
      * @param pageable thông tin phân trang
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<TripDTO> search(String status, Pageable pageable) {
-        if (status == null || status.isBlank()) {
-            return tripRepository.findAll(pageable).map(this::toDTO);
+    public Page<TripDTO> search(String status, String date, Pageable pageable) {
+        Date start = null;
+        Date end = null;
+
+        if (StringUtils.hasText(date)) {
+            try {
+                // Parse date string (yyyy-MM-dd)
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                Date parsedDate = sdf.parse(date);
+
+                // Set start of day
+                start = new Date(parsedDate.getTime());
+
+                // Set end of day
+                end = new Date(parsedDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+            } catch (ParseException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Use yyyy-MM-dd");
+            }
         }
-        Trip.TripStatus parsed;
-        try {
-            parsed = Trip.TripStatus.valueOf(status.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
+
+        Trip.TripStatus parsedStatus = null;
+        if (StringUtils.hasText(status)) {
+            try {
+                parsedStatus = Trip.TripStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
+            }
         }
-        return tripRepository.findByStatus(parsed, pageable).map(this::toDTO);
+
+        Page<Trip> result;
+        if (parsedStatus != null && start != null) {
+            result = tripRepository.findByStatusAndPickupTimeBetween(parsedStatus, start, end, pageable);
+        } else if (parsedStatus != null) {
+            result = tripRepository.findByStatus(parsedStatus, pageable);
+        } else if (start != null) {
+            result = tripRepository.findByPickupTimeBetween(start, end, pageable);
+        } else {
+            result = tripRepository.findAll(pageable);
+        }
+
+        return result.map(this::toDTO);
     }
 
     /**
@@ -175,7 +210,8 @@ public class TripServiceImpl implements TripService {
      * - Cập nhật thông tin khách hàng, địa điểm, thời gian, giá vé.
      * - Có thể cập nhật vehicleId, driverId để phân công xe, tài xế.
      * - Nếu có status hợp lệ thì ghi đè.
-     * @param id id chuyến
+     * 
+     * @param id  id chuyến
      * @param req dữ liệu cập nhật
      */
     @Override
@@ -294,6 +330,7 @@ public class TripServiceImpl implements TripService {
 
     /**
      * Xóa Trip theo id (hard delete).
+     * 
      * @param id id chuyến
      */
     @Override
@@ -316,8 +353,7 @@ public class TripServiceImpl implements TripService {
             pending = safeSum(customerAdvancePaymentRepository
                     .sumAmountByTripIdAndStatuses(trip.getId(), Arrays.asList(
                             CustomerAdvancePayment.Status.PENDING,
-                            CustomerAdvancePayment.Status.SUBMITTED
-                    )));
+                            CustomerAdvancePayment.Status.SUBMITTED)));
         }
         double price = trip.getPrice() != null ? trip.getPrice().doubleValue() : 0d;
         double outstanding = Math.max(price - reconciled, 0d);
@@ -357,9 +393,10 @@ public class TripServiceImpl implements TripService {
                 .customerOutstandingAmount(outstanding)
                 .build();
     }
-    
+
     private String formatDate(Date date) {
-        if (date == null) return null;
+        if (date == null)
+            return null;
         return dateFormat.format(date);
     }
 
@@ -434,9 +471,7 @@ public class TripServiceImpl implements TripService {
                 Arrays.asList(
                         CustomerAdvancePayment.Status.PENDING,
                         CustomerAdvancePayment.Status.SUBMITTED,
-                        CustomerAdvancePayment.Status.RECONCILED
-                )
-        ));
+                        CustomerAdvancePayment.Status.RECONCILED)));
 
         double netAmount = trip.getPrice().doubleValue() - totalAdvance;
         if (netAmount <= 0.0) {

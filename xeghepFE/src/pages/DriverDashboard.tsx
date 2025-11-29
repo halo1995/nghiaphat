@@ -22,6 +22,7 @@ import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 const driverStatusLabels: Record<DriverExpenseStatus, string> = {
   requested: 'Chờ duyệt',
   approved: 'Đã duyệt',
+  transferred: 'Đã chuyển tiền',
   deducted: 'Đã khấu trừ',
   rejected: 'Từ chối',
 };
@@ -29,6 +30,7 @@ const driverStatusLabels: Record<DriverExpenseStatus, string> = {
 const driverStatusVariants: Record<DriverExpenseStatus, 'outline' | 'secondary' | 'default' | 'destructive'> = {
   requested: 'outline',
   approved: 'secondary',
+  transferred: 'default',
   deducted: 'default',
   rejected: 'destructive',
 };
@@ -40,11 +42,19 @@ const driverExpenseLabels: Record<DriverExpenseType, string> = {
   other: 'Khác',
 };
 
+const getCurrentLocalDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const DriverDashboard = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getCurrentLocalDate);
   const [statusFilter, setStatusFilter] = useState<'all' | 'Đã phân xe' | 'Đang đón' | 'Đang đi' | 'Hoàn thành'>('all');
   const [driverAdvanceForm, setDriverAdvanceForm] = useState({
     amount: '',
@@ -65,18 +75,16 @@ const DriverDashboard = () => {
     isFetching: isTripsFetching,
     refetch: refetchTrips,
   } = useQuery({
-    queryKey: ['trips'],
-    queryFn: getTrips,
+    queryKey: ['trips', selectedDate],
+    queryFn: () => getTrips(selectedDate),
     enabled: isAuthenticated && !authLoading,
   });
 
+  // Query driver advances for summary stats only
   const {
     data: driverAdvancesData = [],
-    isLoading: driverAdvancesLoading,
-    isFetching: isAdvancesFetching,
-    refetch: refetchDriverAdvances,
   } = useQuery({
-    queryKey: ['driver-expense-advances', driverId],
+    queryKey: ['driver-expense-advances-summary', driverId],
     queryFn: () => getDriverExpenseAdvances({ driverId }),
     enabled: isAuthenticated && !authLoading && !!driverId,
   });
@@ -116,8 +124,8 @@ const DriverDashboard = () => {
   };
 
   // Filter trips for this driver
-  const myTrips = allTrips.filter(trip => 
-    driverId && trip.driverId === driverId && 
+  const myTrips = allTrips.filter(trip =>
+    driverId && trip.driverId === driverId &&
     trip.status !== 'Đã hủy' &&
     trip.pickupTime.startsWith(selectedDate)
   );
@@ -127,7 +135,7 @@ const DriverDashboard = () => {
     : myTrips.filter(trip => trip.status === statusFilter);
 
   // Sort by pickup time
-  const sortedTrips = [...filteredTrips].sort((a, b) => 
+  const sortedTrips = [...filteredTrips].sort((a, b) =>
     new Date(a.pickupTime).getTime() - new Date(b.pickupTime).getTime()
   );
 
@@ -190,10 +198,10 @@ const DriverDashboard = () => {
     'Hoàn thành': 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
-  const isReloading = isTripsFetching || isAdvancesFetching;
+  const isReloading = isTripsFetching;
 
   const handleReloadData = () => {
-    Promise.allSettled([refetchTrips(), refetchDriverAdvances()]);
+    refetchTrips();
   };
 
   const statusFilterOptions: Array<{ value: typeof statusFilter; label: string }> = [
@@ -323,126 +331,6 @@ const DriverDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-0">
-              <div className="px-6 py-4 border-b">
-                <h2 className="text-lg font-semibold text-gray-900">Lịch sử tạm ứng của tôi</h2>
-                <p className="text-sm text-muted-foreground">Theo dõi trạng thái phê duyệt và khấu trừ</p>
-              </div>
-              {driverAdvancesLoading ? (
-                <div className="p-6 text-center text-muted-foreground">Đang tải danh sách tạm ứng...</div>
-              ) : driverAdvances.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground">Bạn chưa có yêu cầu tạm ứng nào</div>
-              ) : (
-                <>
-                  {/* Mobile: card list */}
-                  <div className="space-y-3 px-4 py-4 md:hidden">
-                    {driverAdvances.map((advance) => (
-                      <div key={advance.id} className="rounded-lg border bg-white p-3 text-sm shadow-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-gray-900">
-                              {driverExpenseLabels[advance.expenseType]}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(advance.requestedAt).toLocaleString('vi-VN')}
-                            </span>
-                          </div>
-                          <Badge variant={driverStatusVariants[advance.status]}>
-                            {driverStatusLabels[advance.status]}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Số tiền</span>
-                          <span className="text-base font-semibold text-gray-900">
-                            {advance.amount.toLocaleString('vi-VN')} ₫
-                          </span>
-                        </div>
-                        <div className="mt-2 space-y-1">
-                          {advance.tripId && (
-                            <p className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</p>
-                          )}
-                          {advance.note && (
-                            <p className="text-xs text-gray-700">Ghi chú: {advance.note}</p>
-                          )}
-                          {advance.rejectionReason && (
-                            <p className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</p>
-                          )}
-                          {advance.attachments.length > 0 && (
-                            <div className="mt-1 space-y-1">
-                              {advance.attachments.map((attachment) => (
-                                <Button
-                                  key={attachment.id}
-                                  variant="link"
-                                  size="sm"
-                                  className="h-6 px-0 text-xs"
-                                  asChild
-                                >
-                                  <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                    {attachment.fileName}
-                                  </a>
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Desktop: table */}
-                  <div className="hidden overflow-x-auto md:block">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50 text-left">
-                        <tr>
-                          <th className="px-6 py-3 font-medium text-muted-foreground">Thời gian</th>
-                          <th className="px-6 py-3 font-medium text-muted-foreground">Loại phí</th>
-                          <th className="px-6 py-3 font-medium text-muted-foreground text-right">Số tiền</th>
-                          <th className="px-6 py-3 font-medium text-muted-foreground">Trạng thái</th>
-                          <th className="px-6 py-3 font-medium text-muted-foreground">Ghi chú</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {driverAdvances.map((advance) => (
-                          <tr key={advance.id} className="border-t">
-                            <td className="px-6 py-3">{new Date(advance.requestedAt).toLocaleString('vi-VN')}</td>
-                            <td className="px-6 py-3">{driverExpenseLabels[advance.expenseType]}</td>
-                            <td className="px-6 py-3 text-right font-medium text-gray-900">{advance.amount.toLocaleString('vi-VN')} ₫</td>
-                            <td className="px-6 py-3">
-                              <Badge variant={driverStatusVariants[advance.status]}>{driverStatusLabels[advance.status]}</Badge>
-                            </td>
-                            <td className="px-6 py-3">
-                              <div className="flex flex-col gap-1">
-                                {advance.note && <span>{advance.note}</span>}
-                                {advance.rejectionReason && (
-                                  <span className="text-xs text-destructive">Lý do từ chối: {advance.rejectionReason}</span>
-                                )}
-                                {advance.tripId && (
-                                  <span className="text-xs text-muted-foreground">Chuyến #{advance.tripId}</span>
-                                )}
-                                {advance.attachments.length > 0 && (
-                                  <div className="flex flex-col gap-1">
-                                    {advance.attachments.map((attachment) => (
-                                      <Button key={attachment.id} variant="link" size="sm" className="justify-start px-0" asChild>
-                                        <a href={attachment.downloadUrl} target="_blank" rel="noopener noreferrer">
-                                          {attachment.fileName}
-                                        </a>
-                                      </Button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Trips List */}
           {isLoading ? (
             <div className="text-center py-12">
@@ -535,9 +423,8 @@ const DriverDashboard = () => {
                             </div>
                             <div className="flex flex-col">
                               <span
-                                className={`flex items-center gap-1 text-sm font-semibold md:text-base ${
-                                  amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'
-                                }`}
+                                className={`flex items-center gap-1 text-sm font-semibold md:text-base ${amountToCollect > 0 ? 'text-amber-600' : 'text-emerald-600'
+                                  }`}
                               >
                                 <Wallet size={16} />
                                 {reconciledAmount > 0
@@ -591,15 +478,15 @@ const DriverDashboard = () => {
                           </div>
                         </div>
 
-                      {trip.notes && (
-                        <div className="mt-3 border-t pt-3 md:mt-4 md:pt-4">
-                          <p className="text-xs text-gray-600 md:text-sm">
-                            <span className="font-medium">Ghi chú:</span> {trip.notes}
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        {trip.notes && (
+                          <div className="mt-3 border-t pt-3 md:mt-4 md:pt-4">
+                            <p className="text-xs text-gray-600 md:text-sm">
+                              <span className="font-medium">Ghi chú:</span> {trip.notes}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </motion.div>
                 );
               })}

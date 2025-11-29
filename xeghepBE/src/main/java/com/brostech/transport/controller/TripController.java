@@ -28,8 +28,9 @@ public class TripController {
 
     @GetMapping
     public Page<TripDTO> search(@RequestParam(value = "status", required = false) String status,
-                                 Pageable pageable) {
-        return tripService.search(status, pageable);
+            @RequestParam(value = "date", required = false) String date,
+            Pageable pageable) {
+        return tripService.search(status, date, pageable);
     }
 
     @PutMapping("/{id}")

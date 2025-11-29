@@ -35,9 +35,6 @@ public class User {
     @Column(length = 32)
     private String phone;
     
-    @Column(length = 500)
-    private String avatar;
-    
     @Column(name = "license_number", length = 64)
     private String licenseNumber;
 

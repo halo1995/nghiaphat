@@ -41,4 +41,9 @@ public class DriverController {
     public void delete(@PathVariable Long id) {
         driverService.delete(id);
     }
+
+    @GetMapping("/{id}/daily-summary")
+    public Object getDailySummary(@PathVariable Long id, @RequestParam String date) {
+        return driverService.getDailySummary(id, date);
+    }
 }

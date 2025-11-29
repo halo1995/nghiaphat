@@ -194,8 +194,10 @@ public class PaymentController {
     @GetMapping("/driver-advances")
     public Page<DriverExpenseAdvanceDTO> searchDriverAdvances(@RequestParam(value = "driverId", required = false) Long driverId,
                                                               @RequestParam(value = "status", required = false) String status,
+                                                              @RequestParam(value = "from", required = false) String from,
+                                                              @RequestParam(value = "to", required = false) String to,
                                                               Pageable pageable) {
-        return paymentService.searchDriverExpenseAdvances(driverId, status, pageable);
+        return paymentService.searchDriverExpenseAdvances(driverId, status, from, to, pageable);
     }
 
     /**

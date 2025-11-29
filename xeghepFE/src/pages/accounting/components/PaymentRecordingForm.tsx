@@ -26,6 +26,7 @@ interface PaymentRecordingFormProps {
         amount: number;
         method: 'cash' | 'transfer';
         attachments: File[];
+        paymentDate?: string;
     }) => void;
     isSubmitting: boolean;
 }
@@ -93,17 +94,23 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
             return;
         }
 
-        // For now, we'll use the first trip ID if available, or empty string
-        // This maintains compatibility with existing API
-        // Backend should eventually handle date-based payment allocation
-        const tripId = dailySummary?.trips[0]?.tripId || '';
+        if (!paymentForm.date) {
+            toast({
+                title: 'Thiếu ngày nộp tiền',
+                description: 'Vui lòng chọn ngày nộp tiền',
+                variant: 'destructive',
+            });
+            return;
+        }
 
+        // Send payment with date, tripId is optional (empty string will be converted to null)
         onSubmit({
-            tripId,
+            tripId: '', // Empty string will be converted to null in backend
             driverId: paymentForm.driverId,
             amount,
             method: paymentForm.method,
             attachments: paymentImages,
+            paymentDate: paymentForm.date,
         });
 
         setPaymentForm({

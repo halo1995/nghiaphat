@@ -54,6 +54,7 @@ export interface TripGroup {
   createdAt: string;
   totalPassengers: number;
   totalRevenue: number;
+  pickupDate?: string; // Format: yyyy-MM-dd
 }
 
 const STATUS_BACKEND_TO_FRONT: Record<TripResponse['status'], Trip['status']> = {
@@ -147,6 +148,7 @@ const mapTripGroupResponse = (group: TripGroupResponse): TripGroup => ({
   createdAt: toFrontendDate(group.createdAt) ?? '',
   totalPassengers: group.totalPassengers ?? 0,
   totalRevenue: group.totalRevenue ?? 0,
+  pickupDate: group.pickupDate ?? undefined,
 });
 
 type TripForRequest = {
@@ -180,7 +182,7 @@ type TripForRequest = {
 };
 
 const buildTripRequest = (trip: TripForRequest, overrideStatus?: Trip['status']): TripRequest => {
-  
+
   const statusLabel = overrideStatus ?? trip.status ?? 'Chờ xác nhận';
 
   return {
@@ -229,8 +231,8 @@ const buildTripGroupRequest = (group: TripGroupForRequest): TripGroupRequest => 
   totalRevenue: group.totalRevenue,
 });
 
-export const getTrips = async (): Promise<Trip[]> => {
-  const response = await apiService.getTrips();
+export const getTrips = async (date?: string): Promise<Trip[]> => {
+  const response = await apiService.getTrips(undefined, date);
   return response.content.map(mapTripResponse);
 };
 
@@ -279,8 +281,8 @@ export const deleteTrip = async (id: string): Promise<void> => {
   await apiService.deleteTrip(Number(id));
 };
 
-export const getTripGroups = async (): Promise<TripGroup[]> => {
-  const response = await apiService.getTripGroups();
+export const getTripGroups = async (date?: string): Promise<TripGroup[]> => {
+  const response = await apiService.getTripGroups(undefined, date);
   return response.content.map(mapTripGroupResponse);
 };
 

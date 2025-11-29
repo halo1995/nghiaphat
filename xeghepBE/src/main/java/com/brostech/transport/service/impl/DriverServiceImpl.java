@@ -4,6 +4,7 @@ import com.brostech.transport.dto.driver.DriverDTO;
 import com.brostech.transport.dto.driver.DriverRequest;
 import com.brostech.transport.jpa.entity.User;
 import com.brostech.transport.jpa.repository.UserRepository;
+import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.service.DriverService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 /**
  * DriverServiceImpl
@@ -30,6 +32,8 @@ public class DriverServiceImpl implements DriverService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TripRepository tripRepository;
+    private final com.brostech.transport.jpa.repository.TripPaymentRepository tripPaymentRepository;
     
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat dateOnlyFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -67,7 +71,6 @@ public class DriverServiceImpl implements DriverService {
                 .role(User.UserRole.DRIVER)
                 .email(req.getEmail())
                 .phone(req.getPhone())
-                .avatar(req.getAvatar())
                 .licenseNumber(req.getLicenseNumber())
                 .licenseExpiry(parseDate(req.getLicenseExpiry()))
                 .address(req.getAddress())
@@ -138,7 +141,6 @@ public class DriverServiceImpl implements DriverService {
         if (req.getStatus() != null) {
             driver.setDriverStatus(req.getStatus());
         }
-        driver.setAvatar(req.getAvatar());
         driver.setVehicleId(req.getVehicleId());
 
         driver = userRepository.save(driver);
@@ -171,7 +173,6 @@ public class DriverServiceImpl implements DriverService {
                 .dateOfBirth(formatDate(driver.getDateOfBirth()))
                 .joinDate(formatDate(driver.getJoinDate()))
                 .status(driver.getDriverStatus() != null ? driver.getDriverStatus() : User.DriverStatus.HOAT_DONG)
-                .avatar(driver.getAvatar())
                 .vehicleId(driver.getVehicleId())
                 .totalTrips(driver.getTotalTrips())
                 .rating(driver.getRating())
@@ -198,5 +199,79 @@ public class DriverServiceImpl implements DriverService {
         if (!normalized.equals(currentUsername) && userRepository.existsByUsername(normalized)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username đã tồn tại");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Object getDailySummary(Long driverId, String date) {
+        User driver = findDriver(driverId);
+
+        // Parse date and create date range for the entire day
+        java.time.LocalDate localDate;
+        try {
+            localDate = java.time.LocalDate.parse(date);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Use yyyy-MM-dd");
+        }
+
+        // Create start and end of day timestamps
+        Date startOfDay = Date.from(localDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+        Date endOfDay = Date.from(localDate.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+
+        // Query database directly for completed trips on this date
+        List<com.brostech.transport.jpa.entity.Trip> trips = tripRepository
+                .findByDriverIdAndStatusAndCompletedAtBetween(
+                        driverId,
+                        com.brostech.transport.jpa.entity.Trip.TripStatus.HOAN_THANH,
+                        startOfDay,
+                        endOfDay
+                );
+
+        // Get all trip IDs to query payments
+        List<Long> tripIds = trips.stream()
+                .map(com.brostech.transport.jpa.entity.Trip::getId)
+                .collect(java.util.stream.Collectors.toList());
+
+        // Query all payments for these trips
+        List<com.brostech.transport.jpa.entity.TripPayment> allPayments = tripPaymentRepository.findAll().stream()
+                .filter(p -> tripIds.contains(p.getTripId()))
+                .collect(java.util.stream.Collectors.toList());
+
+        // Calculate paid amount per trip
+        java.util.Map<Long, Double> paidPerTrip = new java.util.HashMap<>();
+        for (com.brostech.transport.jpa.entity.TripPayment payment : allPayments) {
+            paidPerTrip.merge(payment.getTripId(), payment.getAmount(), Double::sum);
+        }
+        
+        List<com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary> tripSummaries = trips.stream()
+                .map(trip -> {
+                    double amount = trip.getPrice().doubleValue();
+                    double alreadyPaid = paidPerTrip.getOrDefault(trip.getId(), 0.0);
+                    
+                    return com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary.builder()
+                            .tripId(trip.getId())
+                            .pickupLocation(trip.getPickupLocation())
+                            .dropoffLocation(trip.getDropoffLocation())
+                            .amount(amount)
+                            .status(trip.getStatus().name())
+                            .alreadyPaid(alreadyPaid)
+                            .build();
+                })
+                .collect(java.util.stream.Collectors.toList());
+
+        double expectedAmount = tripSummaries.stream()
+                .mapToDouble(com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary::getAmount)
+                .sum();
+
+        // Get current outstanding balance to show overall debt status
+        double currentOutstanding = driver.getOutstandingBalance() != null ? driver.getOutstandingBalance() : 0.0;
+
+        return com.brostech.transport.dto.driver.DriverDailySummaryDTO.builder()
+                .driverId(driverId)
+                .driverName(driver.getName())
+                .date(date)
+                .expectedAmount(expectedAmount)
+                .trips(tripSummaries)
+                .build();
     }
 }

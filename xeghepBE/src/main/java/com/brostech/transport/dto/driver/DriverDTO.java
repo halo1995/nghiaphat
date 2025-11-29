@@ -17,7 +17,6 @@ public class DriverDTO {
     private String dateOfBirth;
     private String joinDate;
     private User.DriverStatus status;
-    private String avatar;
     private Long vehicleId;
     private Integer totalTrips;
     private Double rating;

@@ -13,7 +13,6 @@ export interface User {
   role: 'admin' | 'dispatcher' | 'call_center' | 'driver' | 'accountant';
   email: string;
   phone: string;
-  avatar?: string;
   createdAt: string;
   lastLogin?: string;
 }

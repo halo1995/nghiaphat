@@ -7,4 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TripGroupRepository extends JpaRepository<TripGroup, Long> {
     Page<TripGroup> findByStatus(TripGroup.GroupStatus status, Pageable pageable);
+
+    Page<TripGroup> findByPickupDate(java.time.LocalDate pickupDate, Pageable pageable);
+
+    Page<TripGroup> findByStatusAndPickupDate(TripGroup.GroupStatus status, java.time.LocalDate pickupDate,
+            Pageable pageable);
 }

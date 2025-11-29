@@ -82,30 +82,132 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public TripPaymentDTO createTripPayment(TripPaymentRequest req, List<MultipartFile> attachments) {
-        // Validate driver and trip exist
+        // Validate driver exists
         User driver = userRepository.findByIdAndRole(req.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
 
-        tripRepository.findById(req.getTripId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+        // If tripId is provided, validate it exists
+        if (req.getTripId() != null) {
+            tripRepository.findById(req.getTripId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
+            
+            // Single trip payment - simple case
+            TripPayment payment = TripPayment.builder()
+                    .tripId(req.getTripId())
+                    .driverId(req.getDriverId())
+                    .amount(req.getAmount())
+                    .method(req.getMethod())
+                    .collectedAt(new Date())
+                    .build();
+            
+            payment = tripPaymentRepository.save(payment);
+            adjustDriverOutstanding(driver, req.getAmount());
+            double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
+            driver.setTotalEarnings(currentEarnings + req.getAmount());
+            userRepository.save(driver);
+            attachmentService.storeAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, payment.getId(),
+                    attachments == null ? Collections.emptyList() : attachments);
+            return toTripPaymentDTO(payment);
+        }
 
-        TripPayment payment = TripPayment.builder()
-                .tripId(req.getTripId())
-                .driverId(req.getDriverId())
-                .amount(req.getAmount())
-                .method(req.getMethod())
-                .collectedAt(new Date())
-                .build();
-        
-        payment = tripPaymentRepository.save(payment);
+        // Auto-allocate payment to trips for the given date
+        if (req.getPaymentDate() == null || req.getPaymentDate().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "paymentDate is required when tripId is not specified");
+        }
 
+        // Parse date and get trips for that day
+        java.time.LocalDate localDate;
+        try {
+            localDate = java.time.LocalDate.parse(req.getPaymentDate().trim());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Invalid paymentDate format. Use yyyy-MM-dd");
+        }
+
+        Date startOfDay = Date.from(localDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+        Date endOfDay = Date.from(localDate.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+
+        // Get completed trips for this driver on this date, ordered by completion time
+        List<Trip> trips = tripRepository.findByDriverIdAndStatusAndCompletedAtBetween(
+                req.getDriverId(),
+                Trip.TripStatus.HOAN_THANH,
+                startOfDay,
+                endOfDay
+        );
+
+        if (trips.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "No completed trips found for this driver on " + req.getPaymentDate());
+        }
+
+        // Sort trips by completed time to allocate payment in order
+        trips.sort((t1, t2) -> {
+            if (t1.getCompletedAt() == null) return 1;
+            if (t2.getCompletedAt() == null) return -1;
+            return t1.getCompletedAt().compareTo(t2.getCompletedAt());
+        });
+
+        // Get existing payments for these trips to calculate remaining amount
+        List<Long> tripIds = trips.stream().map(Trip::getId).collect(Collectors.toList());
+        List<TripPayment> existingPayments = tripPaymentRepository.findAll().stream()
+                .filter(p -> tripIds.contains(p.getTripId()))
+                .collect(Collectors.toList());
+
+        // Calculate already paid amount per trip
+        java.util.Map<Long, Double> paidPerTrip = new java.util.HashMap<>();
+        for (TripPayment existing : existingPayments) {
+            paidPerTrip.merge(existing.getTripId(), existing.getAmount(), Double::sum);
+        }
+
+        // Allocate payment to trips
+        double remainingAmount = req.getAmount();
+        TripPayment firstPayment = null;
+
+        for (Trip trip : trips) {
+            if (remainingAmount <= 0) break;
+
+            double tripPrice = trip.getPrice().doubleValue();
+            double alreadyPaid = paidPerTrip.getOrDefault(trip.getId(), 0.0);
+            double remainingForTrip = tripPrice - alreadyPaid;
+
+            if (remainingForTrip <= 0) continue; // Trip already fully paid
+
+            double amountForThisTrip = Math.min(remainingAmount, remainingForTrip);
+
+            TripPayment payment = TripPayment.builder()
+                    .tripId(trip.getId())
+                    .driverId(req.getDriverId())
+                    .amount(amountForThisTrip)
+                    .method(req.getMethod())
+                    .collectedAt(new Date())
+                    .build();
+
+            payment = tripPaymentRepository.save(payment);
+            
+            if (firstPayment == null) {
+                firstPayment = payment;
+                // Store attachments only for the first payment record
+                attachmentService.storeAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, 
+                        payment.getId(), attachments == null ? Collections.emptyList() : attachments);
+            }
+
+            remainingAmount -= amountForThisTrip;
+        }
+
+        // Update driver's outstanding balance and earnings
         adjustDriverOutstanding(driver, req.getAmount());
         double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
         driver.setTotalEarnings(currentEarnings + req.getAmount());
         userRepository.save(driver);
-        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, payment.getId(),
-                attachments == null ? Collections.emptyList() : attachments);
-        return toTripPaymentDTO(payment);
+
+        // Return the first payment record (or create a summary record if needed)
+        if (firstPayment == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "All trips for this date are already fully paid");
+        }
+
+        return toTripPaymentDTO(firstPayment);
     }
 
     @Override
@@ -404,9 +506,34 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, Pageable pageable) {
+    public Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, String from, String to, Pageable pageable) {
         DriverExpenseAdvance.Status parsedStatus = parseDriverAdvanceStatus(status);
+        Date fromDate = parseDate(from);
+        Date toDate = parseDate(to);
 
+        // With date range
+        if (fromDate != null && toDate != null) {
+            if (driverId != null && parsedStatus != null) {
+                return driverExpenseAdvanceRepository
+                        .findByDriverIdAndStatusAndRequestedAtBetween(driverId, parsedStatus, fromDate, toDate, pageable)
+                        .map(this::toDriverExpenseAdvanceDTO);
+            }
+            if (driverId != null) {
+                return driverExpenseAdvanceRepository
+                        .findByDriverIdAndRequestedAtBetween(driverId, fromDate, toDate, pageable)
+                        .map(this::toDriverExpenseAdvanceDTO);
+            }
+            if (parsedStatus != null) {
+                return driverExpenseAdvanceRepository
+                        .findByStatusAndRequestedAtBetween(parsedStatus, fromDate, toDate, pageable)
+                        .map(this::toDriverExpenseAdvanceDTO);
+            }
+            return driverExpenseAdvanceRepository
+                    .findByRequestedAtBetween(fromDate, toDate, pageable)
+                    .map(this::toDriverExpenseAdvanceDTO);
+        }
+
+        // Without date range (original logic)
         if (driverId != null && parsedStatus != null) {
             return driverExpenseAdvanceRepository
                     .findByDriverIdAndStatus(driverId, parsedStatus, pageable)
@@ -701,6 +828,10 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (ParseException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Use yyyy-MM-dd or yyyy-MM-dd HH:mm:ss");
         }
+    }
+
+    private Date parseDate(String value) {
+        return parseDateParam(value, true);
     }
 
     private CustomerAdvancePayment.Status parseCustomerAdvanceStatus(String status) {

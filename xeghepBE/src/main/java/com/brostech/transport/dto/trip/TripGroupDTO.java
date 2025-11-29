@@ -17,4 +17,5 @@ public class TripGroupDTO {
     private String createdAt;
     private Integer totalPassengers;
     private Double totalRevenue;
+    private String pickupDate; // Format: yyyy-MM-dd
 }

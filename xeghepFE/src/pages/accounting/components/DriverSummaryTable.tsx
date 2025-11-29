@@ -132,7 +132,6 @@ export const DriverSummaryTable: React.FC<DriverSummaryTableProps> = ({
                             <TableHead className="text-right">Công nợ</TableHead>
                             <TableHead className="text-right">Tạm ứng</TableHead>
                             <TableHead className="text-right">Chuyến hoàn thành</TableHead>
-                            <TableHead className="text-right">Nộp tiền</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -155,61 +154,6 @@ export const DriverSummaryTable: React.FC<DriverSummaryTableProps> = ({
                                         {driver.advanceOutstanding.toLocaleString('vi-VN')} ₫
                                     </TableCell>
                                     <TableCell className="text-right">{driver.completedTrips}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex flex-wrap justify-end gap-2">
-                                            <Input
-                                                type="number"
-                                                className="w-32"
-                                                placeholder="Số tiền"
-                                                value={depositValues[driver.driverId] ?? ''}
-                                                onChange={(event) =>
-                                                    setDepositValues((prev) => ({ ...prev, [driver.driverId]: event.target.value }))
-                                                }
-                                                min={0}
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                disabled={depositImagesLoading}
-                                                onClick={() => {
-                                                    setDepositAttachmentTarget(driver.driverId);
-                                                    depositFileInputRef.current?.click();
-                                                }}
-                                            >
-                                                Ảnh{driverAttachments.length ? ` (${driverAttachments.length})` : ''}
-                                            </Button>
-                                            {driverAttachments.length > 0 && (
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    onClick={() =>
-                                                        setDepositAttachments((prev) => {
-                                                            const next = { ...prev };
-                                                            delete next[driver.driverId];
-                                                            return next;
-                                                        })
-                                                    }
-                                                >
-                                                    Xóa ảnh
-                                                </Button>
-                                            )}
-                                            <Button
-                                                disabled={isSubmitting || depositImagesLoading}
-                                                onClick={() => handleDeposit(driver.driverId)}
-                                            >
-                                                Nộp
-                                            </Button>
-                                        </div>
-                                        {driverAttachments.length > 0 && (
-                                            <div className="mt-2 flex flex-wrap justify-end gap-2">
-                                                {driverAttachments.map((file, idx) => (
-                                                    <Badge key={`${driver.driverId}-${idx}`} variant="outline">
-                                                        {file.name}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </TableCell>
                                 </TableRow>
                             );
                         })}

@@ -91,8 +91,8 @@ const CallCenter = () => {
   const allowCustomerFinance = role === 'call_center' || role === 'admin';
 
   const { data: trips = [], isLoading } = useQuery({
-    queryKey: ['trips'],
-    queryFn: getTrips,
+    queryKey: ['trips', dateFilter],
+    queryFn: () => getTrips(dateFilter),
     enabled: isAuthenticated && !authLoading,
   });
 

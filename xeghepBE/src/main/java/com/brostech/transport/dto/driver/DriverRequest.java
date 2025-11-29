@@ -19,6 +19,5 @@ public class DriverRequest {
     private String dateOfBirth;
     private String joinDate;
     private User.DriverStatus status = User.DriverStatus.HOAT_DONG;
-    private String avatar;
     private Long vehicleId;
 }

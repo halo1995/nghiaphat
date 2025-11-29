@@ -7,8 +7,12 @@ import org.springframework.data.domain.Pageable;
 
 public interface TripService {
     TripDTO create(TripRequest req);
+
     TripDTO getById(Long id);
-    Page<TripDTO> search(String status, Pageable pageable);
+
+    Page<TripDTO> search(String status, String date, Pageable pageable);
+
     TripDTO update(Long id, TripRequest req);
+
     void delete(Long id);
 }

@@ -28,6 +28,7 @@ public class TripGroupController {
 
     /**
      * Tạo mới nhóm ghép chuyến.
+     * 
      * @param req thông tin nhóm chuyến
      * @return TripGroupDTO đã tạo
      */
@@ -38,6 +39,7 @@ public class TripGroupController {
 
     /**
      * Lấy chi tiết nhóm chuyến theo ID.
+     * 
      * @param id ID của nhóm chuyến
      * @return thông tin chi tiết nhóm chuyến
      */
@@ -47,20 +49,24 @@ public class TripGroupController {
     }
 
     /**
-     * Tìm kiếm nhóm chuyến theo trạng thái (phân trang).
-     * @param status trạng thái nhóm chuyến (tùy chọn)
+     * Tìm kiếm nhóm chuyến theo trạng thái và ngày (phân trang).
+     * 
+     * @param status   trạng thái nhóm chuyến (tùy chọn)
+     * @param date     ngày tạo nhóm chuyến (tùy chọn, format: yyyy-MM-dd)
      * @param pageable thông tin phân trang
      * @return danh sách nhóm chuyến
      */
     @GetMapping
     public Page<TripGroupDTO> search(@RequestParam(value = "status", required = false) String status,
-                                     Pageable pageable) {
-        return tripGroupService.search(status, pageable);
+            @RequestParam(value = "date", required = false) String date,
+            Pageable pageable) {
+        return tripGroupService.search(status, date, pageable);
     }
 
     /**
      * Cập nhật thông tin nhóm chuyến.
-     * @param id ID nhóm chuyến
+     * 
+     * @param id  ID nhóm chuyến
      * @param req thông tin cập nhật
      * @return TripGroupDTO đã cập nhật
      */
@@ -71,6 +77,7 @@ public class TripGroupController {
 
     /**
      * Xóa nhóm chuyến.
+     * 
      * @param id ID nhóm chuyến cần xóa
      */
     @DeleteMapping("/{id}")
@@ -80,7 +87,8 @@ public class TripGroupController {
 
     /**
      * Phân công xe cho nhóm chuyến.
-     * @param id ID nhóm chuyến
+     * 
+     * @param id        ID nhóm chuyến
      * @param vehicleId ID xe muốn phân công
      * @return TripGroupDTO đã cập nhật
      */
@@ -91,7 +99,8 @@ public class TripGroupController {
 
     /**
      * Phân công tài xế cho nhóm chuyến.
-     * @param id ID nhóm chuyến
+     * 
+     * @param id       ID nhóm chuyến
      * @param driverId ID tài xế muốn phân công
      * @return TripGroupDTO đã cập nhật
      */
@@ -102,7 +111,8 @@ public class TripGroupController {
 
     /**
      * Thêm chuyến vào nhóm ghép.
-     * @param id ID nhóm chuyến
+     * 
+     * @param id     ID nhóm chuyến
      * @param tripId ID chuyến muốn thêm
      * @return TripGroupDTO đã cập nhật
      */
@@ -113,7 +123,8 @@ public class TripGroupController {
 
     /**
      * Xóa chuyến khỏi nhóm ghép.
-     * @param id ID nhóm chuyến
+     * 
+     * @param id     ID nhóm chuyến
      * @param tripId ID chuyến muốn xóa
      * @return TripGroupDTO đã cập nhật
      */

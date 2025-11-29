@@ -33,11 +33,11 @@ const toLocalDateKey = (value?: string) => {
 
 const Dispatch = () => {
   const [selectedTrips, setSelectedTrips] = useState<string[]>([]);
-  const defaultDate = useMemo(() => getTodayLocalDate(), []);
   const [filterPickupProvince, setFilterPickupProvince] = useState('all');
   const [filterPickupWard, setFilterPickupWard] = useState('all');
   const [filterDropoffProvince, setFilterDropoffProvince] = useState('all');
   const [filterDropoffWard, setFilterDropoffWard] = useState('all');
+  const defaultDate = useMemo(() => getTodayLocalDate(), []);
   const [filterDate, setFilterDate] = useState<string>(defaultDate);
   const [filterTimeRange, setFilterTimeRange] = useState('all');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -47,8 +47,8 @@ const Dispatch = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: trips = [], isLoading, error } = useQuery({
-    queryKey: ['trips'],
-    queryFn: getTrips,
+    queryKey: ['trips', defaultDate],
+    queryFn: () => getTrips(defaultDate),
     enabled: isAuthenticated && !authLoading,
   });
 
@@ -66,15 +66,15 @@ const Dispatch = () => {
           groupId: newGroup.id
         });
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-      
+
       toast({
         title: "Đã ghép chuyến",
         description: `Đã tạo nhóm chuyến với ${selectedTrips.length} chuyến đi`,
       });
-      
+
       setSelectedTrips([]);
       navigate('/group-trips');
     },
@@ -180,8 +180,8 @@ const Dispatch = () => {
       });
       return;
     }
-    setSelectedTrips(prev => 
-      prev.includes(tripId) 
+    setSelectedTrips(prev =>
+      prev.includes(tripId)
         ? prev.filter(id => id !== tripId)
         : [...prev, tripId]
     );
@@ -286,7 +286,7 @@ const Dispatch = () => {
             <p className="text-sm text-muted-foreground">Đã chọn</p>
             <p className="text-2xl font-bold text-blue-600">{selectedTrips.length}</p>
           </div>
-          <Button 
+          <Button
             onClick={handleCreateGroup}
             disabled={selectedTrips.length === 0 || createGroupMutation.isPending}
             className="gap-2 bg-blue-600 hover:bg-blue-700"
@@ -307,9 +307,9 @@ const Dispatch = () => {
                 <div>
                   <h3 className="font-semibold text-blue-900 mb-1">Hướng dẫn ghép chuyến</h3>
                   <p className="text-sm text-blue-700">
-                    1. Sử dụng bộ lọc để tìm các chuyến cùng khu vực hoặc cùng thời gian<br/>
-                    2. Chọn các chuyến phù hợp để ghép lại<br/>
-                    3. Nhấn "Tạo Nhóm Chuyến" để ghép các chuyến<br/>
+                    1. Sử dụng bộ lọc để tìm các chuyến cùng khu vực hoặc cùng thời gian<br />
+                    2. Chọn các chuyến phù hợp để ghép lại<br />
+                    3. Nhấn "Tạo Nhóm Chuyến" để ghép các chuyến<br />
                     4. Sau đó vào "Nhóm Chuyến" để phân xe và tài xế
                   </p>
                 </div>
@@ -479,15 +479,14 @@ const Dispatch = () => {
               {hasActiveFilters && (
                 <div className="mt-4 pt-4 border-t">
                   <p className="text-sm text-muted-foreground">
-                    Đang hiển thị <span className="font-semibold text-blue-600">{filteredTrips.length}</span> chuyến 
+                    Đang hiển thị <span className="font-semibold text-blue-600">{filteredTrips.length}</span> chuyến
                     {selectedPickupProvince && ` • Đón: ${selectedPickupProvince.name}${selectedPickupWard ? ` - ${selectedPickupWard.name}` : ''}`}
                     {selectedDropoffProvince && ` • Trả: ${selectedDropoffProvince.name}${selectedDropoffWard ? ` - ${selectedDropoffWard.name}` : ''}`}
                     {filterDate && ` • Ngày ${new Date(filterDate).toLocaleDateString('vi-VN')}`}
-                    {filterTimeRange !== 'all' && ` • ${
-                      filterTimeRange === 'morning' ? 'Sáng' :
+                    {filterTimeRange !== 'all' && ` • ${filterTimeRange === 'morning' ? 'Sáng' :
                       filterTimeRange === 'afternoon' ? 'Chiều' :
-                      filterTimeRange === 'evening' ? 'Tối' : 'Đêm'
-                    }`}
+                        filterTimeRange === 'evening' ? 'Tối' : 'Đêm'
+                      }`}
                   </p>
                 </div>
               )}
@@ -507,7 +506,7 @@ const Dispatch = () => {
                   {hasActiveFilters ? 'Không tìm thấy chuyến phù hợp' : 'Chưa có chuyến đã xác nhận'}
                 </h3>
                 <p className="text-muted-foreground">
-                  {hasActiveFilters 
+                  {hasActiveFilters
                     ? 'Thử điều chỉnh bộ lọc để tìm thêm chuyến'
                     : 'Các chuyến đã xác nhận từ tổng đài sẽ hiển thị ở đây'
                   }
@@ -520,109 +519,108 @@ const Dispatch = () => {
                 const isFullVehicle = Boolean(trip.fullVehicle);
                 const pickupTimeLabel = trip.pickupTime
                   ? new Date(trip.pickupTime).toLocaleString('vi-VN', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
                   : 'Chưa cập nhật';
 
                 return (
-                  <Card 
-                  key={trip.id}
-                  className={`hover:shadow-lg transition-all ${
-                    selectedTrips.includes(trip.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                  } ${isFullVehicle ? 'border-green-500 bg-green-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                  onClick={() => {
-                    if (!isFullVehicle) {
-                      handleToggleTrip(trip.id);
-                    }
-                  }}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <Checkbox
-                        checked={selectedTrips.includes(trip.id)}
-                        onCheckedChange={() => handleToggleTrip(trip.id)}
-                        className="mt-1"
-                        disabled={isFullVehicle}
-                      />
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-800">
-                              {trip.customerName}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">{trip.customerPhone}</p>
-                            {isFullVehicle && (
-                              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                  <Card
+                    key={trip.id}
+                    className={`hover:shadow-lg transition-all ${selectedTrips.includes(trip.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                      } ${isFullVehicle ? 'border-green-500 bg-green-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    onClick={() => {
+                      if (!isFullVehicle) {
+                        handleToggleTrip(trip.id);
+                      }
+                    }}
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-start gap-4">
+                        <Checkbox
+                          checked={selectedTrips.includes(trip.id)}
+                          onCheckedChange={() => handleToggleTrip(trip.id)}
+                          className="mt-1"
+                          disabled={isFullVehicle}
+                        />
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-lg font-bold text-gray-800">
+                                {trip.customerName}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">{trip.customerPhone}</p>
+                              {isFullVehicle && (
+                                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                  Thuê nguyên xe
+                                </span>
+                              )}
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${isFullVehicle ? 'bg-green-100 text-green-700 border-green-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
+                              Đã xác nhận
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="flex items-start gap-2">
+                              <MapPin className="text-green-600 mt-1 flex-shrink-0" size={16} />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Điểm đón</p>
+                                <p className="text-sm font-medium text-gray-700">{trip.pickupLocation || 'Chưa cập nhật'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <MapPin className="text-red-600 mt-1 flex-shrink-0" size={16} />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Điểm trả</p>
+                                <p className="text-sm font-medium text-gray-700">{trip.dropoffLocation || 'Chưa cập nhật'}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-4 text-sm">
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <Calendar size={14} />
+                              {pickupTimeLabel}
+                            </span>
+                            {isFullVehicle ? (
+                              <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
                                 Thuê nguyên xe
                               </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                                <Users size={14} />
+                                {trip.passengers} người
+                              </span>
                             )}
-                          </div>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${isFullVehicle ? 'bg-green-100 text-green-700 border-green-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
-                            Đã xác nhận
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="flex items-start gap-2">
-                            <MapPin className="text-green-600 mt-1 flex-shrink-0" size={16} />
-                            <div>
-                              <p className="text-xs text-muted-foreground">Điểm đón</p>
-                              <p className="text-sm font-medium text-gray-700">{trip.pickupLocation || 'Chưa cập nhật'}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <MapPin className="text-red-600 mt-1 flex-shrink-0" size={16} />
-                            <div>
-                              <p className="text-xs text-muted-foreground">Điểm trả</p>
-                              <p className="text-sm font-medium text-gray-700">{trip.dropoffLocation || 'Chưa cập nhật'}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Calendar size={14} />
-                            {pickupTimeLabel}
-                          </span>
-                          {isFullVehicle ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                              Thuê nguyên xe
+                            <span className="text-muted-foreground">
+                              📏 {trip.distance} km
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                              <Users size={14} />
-                              {trip.passengers} người
+                            <span className="font-bold text-green-600">
+                              {trip.price.toLocaleString('vi-VN')} ₫
                             </span>
+                          </div>
+
+                          {trip.notes && (
+                            <div className="pt-2 border-t">
+                              <p className="text-sm text-gray-600">
+                                <span className="font-medium">Ghi chú:</span> {trip.notes}
+                              </p>
+                            </div>
                           )}
-                          <span className="text-muted-foreground">
-                            📏 {trip.distance} km
-                          </span>
-                          <span className="font-bold text-green-600">
-                            {trip.price.toLocaleString('vi-VN')} ₫
-                          </span>
-                        </div>
-
-                        {trip.notes && (
-                          <div className="pt-2 border-t">
-                            <p className="text-sm text-gray-600">
-                              <span className="font-medium">Ghi chú:</span> {trip.notes}
+                          {isFullVehicle && (
+                            <p className="text-xs text-green-700 font-medium">
+                              Chuyến bao nguyên xe — chỉ phân xe và tài xế, không ghép thêm khách.
                             </p>
-                          </div>
-                        )}
-                        {isFullVehicle && (
-                          <p className="text-xs text-green-700 font-medium">
-                            Chuyến bao nguyên xe — chỉ phân xe và tài xế, không ghép thêm khách.
-                          </p>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>

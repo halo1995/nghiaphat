@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 public class TripPaymentRequest {
-    @NotNull
+    // tripId is optional - if null, payment will be recorded for the driver without specific trip
     private Long tripId;
     
     @NotNull
@@ -17,4 +17,7 @@ public class TripPaymentRequest {
     
     @NotNull
     private TripPayment.PaymentMethod method;
+    
+    // Optional: date for which this payment is being recorded (format: yyyy-MM-dd)
+    private String paymentDate;
 }

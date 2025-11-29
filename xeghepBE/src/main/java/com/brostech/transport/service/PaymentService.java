@@ -41,5 +41,5 @@ public interface PaymentService {
     // Driver expense advances
     DriverExpenseAdvanceDTO createDriverExpenseAdvance(DriverExpenseAdvanceRequest req, List<MultipartFile> attachments);
     DriverExpenseAdvanceDTO updateDriverExpenseAdvanceStatus(Long id, DriverExpenseAdvanceStatusUpdateRequest req);
-    Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, Pageable pageable);
+    Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, String from, String to, Pageable pageable);
 }

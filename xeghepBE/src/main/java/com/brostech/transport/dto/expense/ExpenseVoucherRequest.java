@@ -19,7 +19,7 @@ public class ExpenseVoucherRequest {
     @DecimalMin(value = "0.0", inclusive = false)
     private Double amount;
 
-    @NotBlank
+    // Người nhận tiền - không bắt buộc
     private String payeeName;
 
     private String payeeAccount;

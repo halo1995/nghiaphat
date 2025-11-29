@@ -494,8 +494,8 @@ const ExpenseVouchersPage: React.FC = () => {
     }
 
     const amount = Number(formState.amount);
-    if (!formState.title || !formState.payeeName || Number.isNaN(amount) || amount <= 0) {
-      toast({ title: 'Thiếu thông tin', description: 'Kiểm tra lại tiêu đề, người nhận và số tiền', variant: 'destructive' });
+    if (!formState.title || Number.isNaN(amount) || amount <= 0) {
+      toast({ title: 'Thiếu thông tin', description: 'Kiểm tra lại tiêu đề và số tiền', variant: 'destructive' });
       return;
     }
 
@@ -1357,10 +1357,11 @@ const ExpenseVouchersPage: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm text-muted-foreground">Người nhận *</label>
+                  <label className="text-sm text-muted-foreground">Người nhận</label>
                   <Input
                     value={formState.payeeName}
                     disabled={!canEditForm}
+                    placeholder="Tên người nhận (không bắt buộc)"
                     onChange={(event) => setFormState((prev) => ({ ...prev, payeeName: event.target.value }))}
                   />
                 </div>

@@ -42,16 +42,17 @@ const getTodayLocalDate = () => {
 
 const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const defaultDate = useMemo(() => getTodayLocalDate(), []);
 
   const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
-    queryKey: ['tripGroups'],
-    queryFn: getTripGroups,
+    queryKey: ['tripGroups', defaultDate],
+    queryFn: () => getTripGroups(defaultDate),
     enabled: isAuthenticated && !authLoading,
   });
 
   const { data: trips = [] } = useQuery<Trip[]>({
-    queryKey: ['trips'],
-    queryFn: getTrips,
+    queryKey: ['trips', defaultDate],
+    queryFn: () => getTrips(defaultDate),
     enabled: isAuthenticated && !authLoading,
   });
 
@@ -121,7 +122,7 @@ const GroupTrips = () => {
   }, [editingGroup, trips, tripById]);
   const groupFullVehicleMap = useMemo(() =>
     new Map(groups.map(group => [group.id, group.tripIds.some((tripId) => tripById.get(tripId)?.fullVehicle)])),
-  [groups, tripById]);
+    [groups, tripById]);
 
   const filteredGroups = useMemo(() => {
     return groups.filter((group) => {
@@ -573,12 +574,12 @@ const GroupTrips = () => {
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-6">
-      {filteredGroups.map((group, index) => {
-        const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
-        const groupLocked = isGroupLocked(group);
-        const canEditGroup = !groupLocked && group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
-        const isFullVehicleGroup = groupFullVehicleMap.get(group.id) === true;
-                
+              {filteredGroups.map((group, index) => {
+                const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
+                const groupLocked = isGroupLocked(group);
+                const canEditGroup = !groupLocked && group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
+                const isFullVehicleGroup = groupFullVehicleMap.get(group.id) === true;
+
                 return (
                   <motion.div
                     key={group.id}
@@ -588,7 +589,7 @@ const GroupTrips = () => {
                   >
                     <Card className="hover:shadow-xl transition-shadow">
                       <CardContent className="p-6">
-                          <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start justify-between mb-4">
                           <div>
                             <h3 className="text-xl font-bold text-gray-800 mb-1">
                               {group.name}
@@ -596,11 +597,11 @@ const GroupTrips = () => {
                             <p className="text-sm text-muted-foreground">
                               Tạo lúc: {new Date(group.createdAt).toLocaleString('vi-VN')}
                             </p>
-                              {isFullVehicleGroup && (
-                                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                                  Thuê nguyên xe
-                                </span>
-                              )}
+                            {isFullVehicleGroup && (
+                              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                                Thuê nguyên xe
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[group.status]}`}>
@@ -800,9 +801,8 @@ const GroupTrips = () => {
                         return (
                           <label
                             key={trip.id}
-                            className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                              checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                            } ${(disabled || preventChanges) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                            className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${checked ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                              } ${(disabled || preventChanges) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                           >
                             <Checkbox
                               checked={checked}
@@ -906,7 +906,7 @@ const GroupTrips = () => {
                 <div className="rounded-lg border bg-gray-50 p-4 text-center">
                   <p className="text-sm text-muted-foreground">Tổng doanh thu</p>
                   <p className="mt-1 text-xl font-semibold text-green-600">
-                  {(totalRevenue / 1_000_000).toFixed(2)}M ₫
+                    {(totalRevenue / 1_000_000).toFixed(2)}M ₫
                   </p>
                 </div>
               </div>

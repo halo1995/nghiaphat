@@ -22,4 +22,13 @@ public interface DriverExpenseAdvanceRepository extends JpaRepository<DriverExpe
     List<DriverExpenseAdvance> findByDriverIdAndStatusIn(Long driverId, Collection<DriverExpenseAdvance.Status> statuses);
     
     List<DriverExpenseAdvance> findByRequestedAtBetween(Date from, Date to);
+
+    // Date range queries with pagination
+    Page<DriverExpenseAdvance> findByRequestedAtBetween(Date from, Date to, Pageable pageable);
+
+    Page<DriverExpenseAdvance> findByDriverIdAndRequestedAtBetween(Long driverId, Date from, Date to, Pageable pageable);
+
+    Page<DriverExpenseAdvance> findByStatusAndRequestedAtBetween(DriverExpenseAdvance.Status status, Date from, Date to, Pageable pageable);
+
+    Page<DriverExpenseAdvance> findByDriverIdAndStatusAndRequestedAtBetween(Long driverId, DriverExpenseAdvance.Status status, Date from, Date to, Pageable pageable);
 }

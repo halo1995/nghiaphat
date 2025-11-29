@@ -27,7 +27,8 @@ import java.util.stream.Collectors;
 
 /**
  * TripGroupServiceImpl
- * Nghiệp vụ: Quản lý nhóm ghép chuyến (tạo, phân công xe/tài xế, thêm/bớt chuyến).
+ * Nghiệp vụ: Quản lý nhóm ghép chuyến (tạo, phân công xe/tài xế, thêm/bớt
+ * chuyến).
  * Quy tắc chính:
  * - Tạo nhóm để ghép nhiều chuyến đi có cùng lộ trình.
  * - Có thể phân công xe, tài xế cho nhóm.
@@ -43,10 +44,10 @@ public class TripGroupServiceImpl implements TripGroupService {
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
-    
+
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    private static final Set<Trip.TripStatus> DRIVER_CONFIRMED_STATUSES =
-            EnumSet.of(Trip.TripStatus.DANG_DON, Trip.TripStatus.DANG_DI, Trip.TripStatus.HOAN_THANH);
+    private static final Set<Trip.TripStatus> DRIVER_CONFIRMED_STATUSES = EnumSet.of(Trip.TripStatus.DANG_DON,
+            Trip.TripStatus.DANG_DI, Trip.TripStatus.HOAN_THANH);
 
     @Override
     public TripGroupDTO create(TripGroupRequest req) {
@@ -61,6 +62,11 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .totalPassengers(req.getTotalPassengers())
                 .totalRevenue(req.getTotalRevenue())
                 .build();
+
+        // Calculate and set pickup date from trips
+        java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(req.getTripIds()));
+        group.setPickupDate(pickupDate);
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -75,17 +81,37 @@ public class TripGroupServiceImpl implements TripGroupService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<TripGroupDTO> search(String status, Pageable pageable) {
-        if (status == null || status.isBlank()) {
+    public Page<TripGroupDTO> search(String status, String date, Pageable pageable) {
+        // Parse date if provided
+        java.time.LocalDate pickupDate = null;
+        if (date != null && !date.isBlank()) {
+            try {
+                pickupDate = java.time.LocalDate.parse(date.trim());
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date format. Use yyyy-MM-dd");
+            }
+        }
+
+        // Parse status if provided
+        TripGroup.GroupStatus parsed = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                parsed = TripGroup.GroupStatus.valueOf(status.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
+            }
+        }
+
+        // Query based on filters using pickupDate
+        if (parsed != null && pickupDate != null) {
+            return tripGroupRepository.findByStatusAndPickupDate(parsed, pickupDate, pageable).map(this::toDTO);
+        } else if (parsed != null) {
+            return tripGroupRepository.findByStatus(parsed, pageable).map(this::toDTO);
+        } else if (pickupDate != null) {
+            return tripGroupRepository.findByPickupDate(pickupDate, pageable).map(this::toDTO);
+        } else {
             return tripGroupRepository.findAll(pageable).map(this::toDTO);
         }
-        TripGroup.GroupStatus parsed;
-        try {
-            parsed = TripGroup.GroupStatus.valueOf(status.trim().toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status value");
-        }
-        return tripGroupRepository.findByStatus(parsed, pageable).map(this::toDTO);
     }
 
     @Override
@@ -110,7 +136,13 @@ public class TripGroupServiceImpl implements TripGroupService {
         }
         group.setTotalPassengers(req.getTotalPassengers());
         group.setTotalRevenue(req.getTotalRevenue());
-        
+
+        // Recalculate pickup date when tripIds change
+        if (req.getTripIds() != null) {
+            java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(req.getTripIds()));
+            group.setPickupDate(pickupDate);
+        }
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -129,13 +161,13 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
 
         assertGroupEditable(group);
-        
+
         var vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid vehicleId"));
-        
+
         group.setVehicleId(vehicleId);
         group.setVehicleName(vehicle.getName());
-        
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -144,15 +176,15 @@ public class TripGroupServiceImpl implements TripGroupService {
     public TripGroupDTO assignDriver(Long groupId, Long driverId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
-        
+
         assertGroupEditable(group);
-        
+
         var driver = userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
-        
+
         group.setDriverId(driverId);
         group.setDriverName(driver.getName());
-        
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -161,35 +193,43 @@ public class TripGroupServiceImpl implements TripGroupService {
     public TripGroupDTO addTrip(Long groupId, Long tripId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
-        
+
         assertGroupEditable(group);
-        
+
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
 
         if (Boolean.TRUE.equals(trip.getFullVehicle())) {
             if (hasTrips(group)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
             }
         } else if (groupContainsFullVehicle(group)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
         }
 
         if (Boolean.TRUE.equals(trip.getPickupConfirmed())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
         }
-        
+
         String currentTripIds = group.getTripIds();
         if (currentTripIds == null || currentTripIds.trim().isEmpty()) {
             currentTripIds = tripId.toString();
         } else {
             currentTripIds += "," + tripId;
         }
-        
+
         group.setTripIds(currentTripIds);
-        group.setTotalPassengers((group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) + trip.getPassengers());
-        group.setTotalRevenue((group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) + trip.getPrice().doubleValue());
-        
+        group.setTotalPassengers(
+                (group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) + trip.getPassengers());
+        group.setTotalRevenue(
+                (group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) + trip.getPrice().doubleValue());
+
+        // Update pickup date if new trip has earlier pickup time
+        java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(currentTripIds));
+        group.setPickupDate(pickupDate);
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -198,16 +238,16 @@ public class TripGroupServiceImpl implements TripGroupService {
     public TripGroupDTO removeTrip(Long groupId, Long tripId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
-        
+
         assertGroupEditable(group);
-        
+
         var trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid tripId"));
 
         if (Boolean.TRUE.equals(trip.getFullVehicle())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể tách chuyến thuê nguyên xe khỏi nhóm");
         }
-        
+
         String currentTripIds = group.getTripIds();
         if (currentTripIds != null && !currentTripIds.trim().isEmpty()) {
             String[] tripIdArray = currentTripIds.split(",");
@@ -221,10 +261,16 @@ public class TripGroupServiceImpl implements TripGroupService {
                 }
             }
             group.setTripIds(newTripIds.toString());
-            group.setTotalPassengers(Math.max(0, (group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) - trip.getPassengers()));
-            group.setTotalRevenue(Math.max(0.0, (group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) - trip.getPrice().doubleValue()));
+            group.setTotalPassengers(Math.max(0,
+                    (group.getTotalPassengers() == null ? 0 : group.getTotalPassengers()) - trip.getPassengers()));
+            group.setTotalRevenue(Math.max(0.0,
+                    (group.getTotalRevenue() == null ? 0.0 : group.getTotalRevenue()) - trip.getPrice().doubleValue()));
+
+            // Recalculate pickup date from remaining trips
+            java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(newTripIds.toString()));
+            group.setPickupDate(pickupDate);
         }
-        
+
         group = tripGroupRepository.save(group);
         return toDTO(group);
     }
@@ -242,11 +288,13 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .createdAt(formatDate(group.getCreatedAt()))
                 .totalPassengers(group.getTotalPassengers())
                 .totalRevenue(group.getTotalRevenue())
+                .pickupDate(group.getPickupDate() != null ? group.getPickupDate().toString() : null)
                 .build();
     }
-    
+
     private String formatDate(Date date) {
-        if (date == null) return null;
+        if (date == null)
+            return null;
         return dateFormat.format(date);
     }
 
@@ -260,7 +308,8 @@ public class TripGroupServiceImpl implements TripGroupService {
         }
         boolean locked = tripRepository.findAllById(tripIds).stream().anyMatch(this::isTripLocked);
         if (locked) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa nhóm sau khi tài xế đã xác nhận đón khách");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể chỉnh sửa nhóm sau khi tài xế đã xác nhận đón khách");
         }
     }
 
@@ -285,7 +334,8 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .filter(trip -> Boolean.TRUE.equals(trip.getFullVehicle()))
                 .count();
         if (fullVehicleCount > 0 && trips.size() > 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Không thể ghép thêm khách vào chuyến thuê nguyên xe");
         }
     }
 
@@ -324,5 +374,22 @@ public class TripGroupServiceImpl implements TripGroupService {
         }
         Trip.TripStatus status = trip.getStatus();
         return status != null && DRIVER_CONFIRMED_STATUSES.contains(status);
+    }
+
+    /**
+     * Calculate pickup date from list of trip IDs
+     * Returns the earliest pickup date among all trips
+     */
+    private java.time.LocalDate calculatePickupDate(List<Long> tripIds) {
+        if (tripIds == null || tripIds.isEmpty()) {
+            return null;
+        }
+        List<Trip> trips = tripRepository.findAllById(tripIds);
+        return trips.stream()
+                .map(Trip::getPickupTime)
+                .filter(pickupTime -> pickupTime != null)
+                .map(pickupTime -> new java.sql.Date(pickupTime.getTime()).toLocalDate())
+                .min(java.time.LocalDate::compareTo)
+                .orElse(null);
     }
 }

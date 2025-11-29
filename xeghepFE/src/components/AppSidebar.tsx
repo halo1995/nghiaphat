@@ -1,5 +1,4 @@
-import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -12,7 +11,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Phone, GitMerge, Truck, Car, UserCircle, Users, Lock, LogOut, Home, Banknote } from 'lucide-react';
+import { LayoutDashboard, Phone, GitMerge, Truck, Car, UserCircle, Users, Lock, LogOut, Home, Banknote, Wallet } from 'lucide-react';
 import { getCurrentUser, logout } from '@/data/auth';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +50,7 @@ export function AppSidebar() {
           label: 'Tài Xế',
           items: [
             { title: 'Lịch Trình Của Tôi', icon: LayoutDashboard, href: '/driver' },
+            { title: 'Lịch Sử Tạm Ứng', icon: Wallet, href: '/driver/advances' },
           ]
         },
       ];
@@ -134,11 +134,16 @@ export function AppSidebar() {
               <SidebarMenu>
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={location.pathname === item.href}>
-                      <Link to={item.href}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
+                    <SidebarMenuButton 
+                      isActive={location.pathname === item.href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(item.href, { replace: true });
+                      }}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -152,11 +157,6 @@ export function AppSidebar() {
         {currentUser && (
           <div className="space-y-3">
             <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-10 h-10 rounded-full object-cover"
-              />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">
                   {currentUser.name}
@@ -171,12 +171,15 @@ export function AppSidebar() {
             </div>
             
             <div className="flex gap-2">
-              <Link to="/change-password" className="flex-1">
-                <Button variant="outline" size="sm" className="w-full gap-2">
-                  <Lock size={14} />
-                  Đổi MK
-                </Button>
-              </Link>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1 gap-2"
+                onClick={() => navigate('/change-password')}
+              >
+                <Lock size={14} />
+                Đổi MK
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

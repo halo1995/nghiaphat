@@ -17,13 +17,24 @@ import {
   Calendar,
   ArrowRight,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+
+const getTodayLocalDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 10);
+};
 
 const Index = () => {
+  const defaultDate = useMemo(() => getTodayLocalDate(), []);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: vehiclesData, isLoading: vehiclesLoading } = useVehicles();
   const { data: driversData, isLoading: driversLoading } = useDrivers();
   const { data: trips = [], isLoading: tripsLoading } = useQuery<Trip[]>({
-    queryKey: ['dashboard-trips'],
-    queryFn: getTrips,
+    queryKey: ['dashboard-trips', defaultDate],
+    queryFn: () => getTrips(defaultDate),
+    enabled: isAuthenticated && !authLoading,
   });
   const { data: tripGroups = [], isLoading: groupsLoading } = useQuery<TripGroup[]>({
     queryKey: ['dashboard-trip-groups'],
@@ -37,10 +48,10 @@ const Index = () => {
     const normalize = (value: unknown) =>
       value
         ? value
-            .toString()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toUpperCase()
+          .toString()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toUpperCase()
         : '';
 
     const totalVehicles = vehicles.length;

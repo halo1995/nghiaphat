@@ -63,7 +63,6 @@ public class UserServiceImpl implements UserService {
                 .role(request.getRole())
                 .email(request.getEmail())
                 .phone(request.getPhone())
-                .avatar(request.getAvatar())
                 .build();
         
         User savedUser = userRepository.save(user);
@@ -88,7 +87,6 @@ public class UserServiceImpl implements UserService {
         user.setRole(request.getRole());
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
-        user.setAvatar(request.getAvatar());
         
         User updatedUser = userRepository.save(user);
         return convertToDTO(updatedUser);
@@ -128,7 +126,6 @@ public class UserServiceImpl implements UserService {
                 .role(user.getRole())
                 .email(user.getEmail())
                 .phone(user.getPhone())
-                .avatar(user.getAvatar())
                 .build();
     }
 }

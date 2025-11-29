@@ -74,6 +74,7 @@ public class SecurityConfiguration {
                                 "/transport-service/auth/login")
                         .permitAll()
                         .requestMatchers("/payments/**").hasAnyRole("ADMIN", "ACCOUNTANT")
+                        .requestMatchers("/transport-service/admin/migration/**").hasRole("ADMIN")
                         .anyRequest()
                         .authenticated())
                 .authenticationProvider(authenticationProvider())

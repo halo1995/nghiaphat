@@ -338,12 +338,14 @@ export const recordTripPayment = async (input: {
   amount: number;
   method: PaymentMethod;
   attachments?: File[];
+  paymentDate?: string; // Optional: yyyy-MM-dd format
 }): Promise<TripPayment> => {
-  const request = {
-    tripId: Number(input.tripId),
+  const request: any = {
+    tripId: input.tripId && input.tripId.trim() ? Number(input.tripId) : null,
     driverId: Number(input.driverId),
     amount: input.amount,
     method: METHOD_TO_BACK[input.method],
+    paymentDate: input.paymentDate,
   };
   const response = await apiService.createTripPayment(request, input.attachments ?? []);
   return mapTripPayment(response);
@@ -433,12 +435,18 @@ export const updateCustomerAdvanceStatus = async (input: {
 export const getDriverExpenseAdvances = async (options?: {
   driverId?: string;
   status?: DriverExpenseStatus;
+  from?: Date;
+  to?: Date;
   page?: number;
   size?: number;
 }): Promise<DriverExpenseAdvance[]> => {
+  const fromDate = toQueryDate(options?.from);
+  const toDate = toQueryDate(options?.to);
   const response = await apiService.getDriverExpenseAdvances(
     options?.driverId ? Number(options.driverId) : undefined,
     options?.status ? DRIVER_STATUS_TO_BACK[options.status] : undefined,
+    fromDate,
+    toDate,
     options?.page ?? 0,
     options?.size ?? 100,
   );

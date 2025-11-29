@@ -55,6 +55,9 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
+      if (response.status === 401) {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
       const error = await response.text();
       throw new Error(error || `HTTP error! status: ${response.status}`);
     }
@@ -260,9 +263,10 @@ class ApiService {
   }
 
   // Trip APIs
-  async getTrips(status?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripResponse>> {
+  async getTrips(status?: string, date?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (status) params.append('status', status);
+    if (date) params.append('date', date);
 
     const response = await fetch(`${this.buildUrl('/trips')}?${params}`, {
       headers: this.getAuthHeaders(),
@@ -412,12 +416,16 @@ class ApiService {
   async getDriverExpenseAdvances(
     driverId?: number,
     status?: string,
+    from?: string,
+    to?: string,
     page: number = 0,
     size: number = 100,
   ): Promise<ApiResponse<DriverExpenseAdvanceResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (driverId != null) params.append('driverId', driverId.toString());
     if (status) params.append('status', status);
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
 
     const response = await fetch(`${this.buildUrl('/payments/driver-advances')}?${params}`, {
       headers: this.getAuthHeaders(),
@@ -611,11 +619,19 @@ class ApiService {
   }
 
   // Trip group APIs
-  async getTripGroups(status?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripGroupResponse>> {
-    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
-    if (status) params.append('status', status);
-
-    const response = await fetch(`${this.buildUrl('/trip-groups')}?${params}`, {
+  async getTripGroups(status?: string, date?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripGroupResponse>> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      size: size.toString(),
+    });
+    if (status) {
+      params.append('status', status);
+    }
+    if (date) {
+      params.append('date', date);
+    }
+    const response = await fetch(this.buildUrl(`/trip-groups?${params.toString()}`), {
+      method: 'GET',
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripGroupResponse>>(response);

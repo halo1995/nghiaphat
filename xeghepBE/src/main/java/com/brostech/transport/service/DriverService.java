@@ -11,4 +11,5 @@ public interface DriverService {
     Page<DriverDTO> search(String keyword, Pageable pageable);
     DriverDTO update(Long id, DriverRequest req);
     void delete(Long id);
+    Object getDailySummary(Long driverId, String date);
 }

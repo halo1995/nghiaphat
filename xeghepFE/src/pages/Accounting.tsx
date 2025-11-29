@@ -63,6 +63,9 @@ const Accounting: React.FC = () => {
 
   const [previewAdvance, setPreviewAdvance] = useState<CustomerAdvancePayment | null>(null);
   const [previewAction, setPreviewAction] = useState<CustomerAdvanceStatus | null>(null);
+  
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<'driver-summary' | 'customer-advances'>('driver-summary');
 
   // Date objects for tab filters
   const dateFromObj = useMemo(() => (dateFrom ? new Date(dateFrom) : undefined), [dateFrom]);
@@ -272,14 +275,23 @@ const Accounting: React.FC = () => {
       <AccountingSummary data={summary} />
 
       {/* Tabs */}
-      <Tabs defaultValue="driver-summary" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="driver-summary">Tổng hợp tài xế</TabsTrigger>
-          <TabsTrigger value="customer-advances">Ứng trước khách hàng</TabsTrigger>
-        </TabsList>
+      <div className="space-y-6">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={(value) => {
+            console.log('Tab changed to:', value);
+            setActiveTab(value as 'driver-summary' | 'customer-advances');
+          }}
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="driver-summary">Tổng hợp tài xế</TabsTrigger>
+            <TabsTrigger value="customer-advances">Ứng trước khách hàng</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Driver Summary Tab */}
-        <TabsContent value="driver-summary" className="space-y-6">
+        {activeTab === 'driver-summary' && (
+        <div className="space-y-6">
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-2">
             <DatePickerField value={dateFrom} onChange={setDateFrom} placeholder="Từ ngày" allowClear />
@@ -343,10 +355,12 @@ const Accounting: React.FC = () => {
             selectedDriverFilter={selectedDriverFilter}
             onOpenAttachment={openAttachment}
           />
-        </TabsContent>
+        </div>
+        )}
 
         {/* Customer Advances Tab */}
-        <TabsContent value="customer-advances" className="space-y-6">
+        {activeTab === 'customer-advances' && (
+        <div className="space-y-6">
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-2">
             <DatePickerField value={dateFrom} onChange={setDateFrom} placeholder="Từ ngày" allowClear />
@@ -372,8 +386,9 @@ const Accounting: React.FC = () => {
             isLoading={isLoading}
             isSubmitting={customerAdvanceStatusMut.isPending}
           />
-        </TabsContent>
-      </Tabs>
+        </div>
+        )}
+      </div>
 
       {/* Dialogs */}
       <AdvancePreviewDialog

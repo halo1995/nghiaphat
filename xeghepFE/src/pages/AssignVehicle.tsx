@@ -13,19 +13,27 @@ import { ArrowLeft, Truck, CheckCircle, Users, Star, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
+const getTodayLocalDate = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
 const AssignVehicle = () => {
   const { groupId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const defaultDate = useMemo(() => getTodayLocalDate(), []);
 
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('');
 
   const { data: groups = [] } = useQuery({
-    queryKey: ['tripGroups'],
-    queryFn: getTripGroups,
+    queryKey: ['tripGroups', defaultDate],
+    queryFn: () => getTripGroups(defaultDate),
     enabled: isAuthenticated && !authLoading,
   });
 
@@ -50,8 +58,8 @@ const AssignVehicle = () => {
   });
 
   const { data: trips = [] } = useQuery({
-    queryKey: ['trips'],
-    queryFn: getTrips,
+    queryKey: ['trips', defaultDate],
+    queryFn: () => getTrips(defaultDate),
     enabled: isAuthenticated && !authLoading,
   });
 
@@ -155,12 +163,12 @@ const AssignVehicle = () => {
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-      
+
       toast({
         title: "Đã phân xe",
         description: "Xe và tài xế đã được phân công thành công",
       });
-      
+
       navigate('/group-trips');
     },
   });
