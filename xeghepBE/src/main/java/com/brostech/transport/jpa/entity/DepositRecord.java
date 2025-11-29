@@ -20,6 +20,9 @@ public class DepositRecord {
     @Column(name = "driver_id")
     private Long driverId;
     
+    @Column(name = "trip_id")
+    private Long tripId; // Optional: Link deposit to specific trip for auto-allocation
+    
     @Column(nullable = false)
     private Double amount;
     

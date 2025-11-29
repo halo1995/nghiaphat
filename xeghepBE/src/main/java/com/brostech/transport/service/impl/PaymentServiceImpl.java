@@ -195,17 +195,28 @@ public class PaymentServiceImpl implements PaymentService {
             remainingAmount -= amountForThisTrip;
         }
 
+        // If no payment was allocated, provide detailed error
+        if (firstPayment == null) {
+            if (trips.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Không có chuyến hoàn thành nào trong ngày " + req.getPaymentDate());
+            } else {
+                // All trips are fully paid - this means driver already collected full amount
+                double totalPrice = trips.stream().mapToDouble(t -> t.getPrice().doubleValue()).sum();
+                double totalPaid = paidPerTrip.values().stream().mapToDouble(Double::doubleValue).sum();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        String.format("Tất cả %d chuyến trong ngày %s đã được ghi nhận đủ tiền thu từ khách. " +
+                                "Tổng giá trị: %.0fđ, Đã ghi nhận: %.0fđ. " +
+                                "Nếu cần điều chỉnh, vui lòng xóa bản ghi cũ trước.",
+                                trips.size(), req.getPaymentDate(), totalPrice, totalPaid));
+            }
+        }
+
         // Update driver's outstanding balance and earnings
         adjustDriverOutstanding(driver, req.getAmount());
         double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
         driver.setTotalEarnings(currentEarnings + req.getAmount());
         userRepository.save(driver);
-
-        // Return the first payment record (or create a summary record if needed)
-        if (firstPayment == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "All trips for this date are already fully paid");
-        }
 
         return toTripPaymentDTO(firstPayment);
     }
@@ -251,24 +262,133 @@ public class PaymentServiceImpl implements PaymentService {
         User driver = userRepository.findByIdAndRole(req.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
 
-        DepositRecord deposit = DepositRecord.builder()
-                .driverId(req.getDriverId())
-                .amount(req.getAmount())
-                .note(req.getNote())
-                .createdAt(new Date())
-                .build();
-        
-        deposit = depositRecordRepository.save(deposit);
+        // Simple deposit without date-based allocation
+        if (req.getPaymentDate() == null || req.getPaymentDate().trim().isEmpty()) {
+            DepositRecord deposit = DepositRecord.builder()
+                    .driverId(req.getDriverId())
+                    .amount(req.getAmount())
+                    .note(req.getNote())
+                    .createdAt(new Date())
+                    .build();
+            
+            deposit = depositRecordRepository.save(deposit);
+            adjustDriverOutstanding(driver, -req.getAmount());
+            userRepository.save(driver);
+            creditCompanyWallet(req.getAmount(),
+                    "Nộp tiền tài xế",
+                    PaymentAttachment.ReferenceType.DEPOSIT_RECORD,
+                    deposit.getId(),
+                    driver.getId());
+            attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, deposit.getId(),
+                    attachments == null ? Collections.emptyList() : attachments);
+            return toDepositRecordDTO(deposit);
+        }
+
+        // Auto-allocate deposit to trips for the given date
+        java.time.LocalDate localDate;
+        try {
+            localDate = java.time.LocalDate.parse(req.getPaymentDate().trim());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Invalid paymentDate format. Use yyyy-MM-dd");
+        }
+
+        Date startOfDay = Date.from(localDate.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+        Date endOfDay = Date.from(localDate.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+
+        // Get completed trips for this driver on this date
+        List<Trip> trips = tripRepository.findByDriverIdAndStatusAndCompletedAtBetween(
+                req.getDriverId(),
+                Trip.TripStatus.HOAN_THANH,
+                startOfDay,
+                endOfDay
+        );
+
+        if (trips.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Không có chuyến hoàn thành nào trong ngày " + req.getPaymentDate());
+        }
+
+        // Sort trips by completed time
+        trips.sort((t1, t2) -> {
+            if (t1.getCompletedAt() == null) return 1;
+            if (t2.getCompletedAt() == null) return -1;
+            return t1.getCompletedAt().compareTo(t2.getCompletedAt());
+        });
+
+        // Calculate how much each trip still owes (price - already deposited)
+        List<Long> tripIds = trips.stream().map(Trip::getId).collect(Collectors.toList());
+        List<DepositRecord> existingDeposits = depositRecordRepository.findAll().stream()
+                .filter(d -> d.getTripId() != null && tripIds.contains(d.getTripId()))
+                .collect(Collectors.toList());
+
+        java.util.Map<Long, Double> depositedPerTrip = new java.util.HashMap<>();
+        for (DepositRecord existing : existingDeposits) {
+            depositedPerTrip.merge(existing.getTripId(), existing.getAmount(), Double::sum);
+        }
+
+        // Allocate deposit amount to trips
+        double remainingAmount = req.getAmount();
+        DepositRecord firstDeposit = null;
+
+        for (Trip trip : trips) {
+            if (remainingAmount <= 0) break;
+
+            double tripPrice = trip.getPrice().doubleValue();
+            double alreadyDeposited = depositedPerTrip.getOrDefault(trip.getId(), 0.0);
+            double remainingForTrip = tripPrice - alreadyDeposited;
+
+            if (remainingForTrip <= 0) continue; // Trip already fully deposited
+
+            double amountForThisTrip = Math.min(remainingAmount, remainingForTrip);
+
+            DepositRecord deposit = DepositRecord.builder()
+                    .driverId(req.getDriverId())
+                    .tripId(trip.getId())
+                    .amount(amountForThisTrip)
+                    .note(req.getNote())
+                    .createdAt(new Date())
+                    .build();
+
+            deposit = depositRecordRepository.save(deposit);
+            
+            if (firstDeposit == null) {
+                firstDeposit = deposit;
+                // Store attachments only for the first deposit record
+                attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, 
+                        deposit.getId(), attachments == null ? Collections.emptyList() : attachments);
+            }
+
+            remainingAmount -= amountForThisTrip;
+        }
+
+        // If no deposit was allocated, provide error
+        if (firstDeposit == null) {
+            if (trips.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Không có chuyến hoàn thành nào trong ngày " + req.getPaymentDate());
+            } else {
+                double totalPrice = trips.stream().mapToDouble(t -> t.getPrice().doubleValue()).sum();
+                double totalDeposited = depositedPerTrip.values().stream().mapToDouble(Double::doubleValue).sum();
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        String.format("Tất cả %d chuyến trong ngày %s đã được nộp đủ tiền. " +
+                                "Tổng giá trị: %.0fđ, Đã nộp: %.0fđ.",
+                                trips.size(), req.getPaymentDate(), totalPrice, totalDeposited));
+            }
+        }
+
+        // Update driver's outstanding balance
         adjustDriverOutstanding(driver, -req.getAmount());
         userRepository.save(driver);
+        
+        // Credit company wallet
         creditCompanyWallet(req.getAmount(),
-                "Nộp tiền tài xế",
+                "Nộp tiền tài xế - " + req.getPaymentDate(),
                 PaymentAttachment.ReferenceType.DEPOSIT_RECORD,
-                deposit.getId(),
+                firstDeposit.getId(),
                 driver.getId());
-        attachmentService.storeAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, deposit.getId(),
-                attachments == null ? Collections.emptyList() : attachments);
-        return toDepositRecordDTO(deposit);
+
+        return toDepositRecordDTO(firstDeposit);
     }
 
     @Override

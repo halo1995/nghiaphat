@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,11 +12,17 @@ import {
   CustomerAdvanceStatus,
   DriverExpenseStatus,
   PaymentAttachment,
+  getRevenueSummary,
+  getDeposits,
+  getPayments,
+  getCustomerAdvances,
+  getDriverExpenseAdvances,
+  createDeposit,
+  recordTripPayment,
+  updateCustomerAdvanceStatus,
+  updateDriverExpenseAdvanceStatus,
 } from '@/data/accounting';
-
-// Hooks
-import { useAccountingData } from './accounting/hooks/useAccountingData';
-import { useAccountingMutations } from './accounting/hooks/useAccountingMutations';
+import { getDrivers } from '@/data/drivers';
 
 // Components
 import { AccountingSummary } from './accounting/components/AccountingSummary';
@@ -57,7 +64,7 @@ const Accounting: React.FC = () => {
   // State for tab filters (daily)
   const [dateFrom, setDateFrom] = useState<string>(() => currentDate);
   const [dateTo, setDateTo] = useState<string>(() => currentDate);
-  const [selectedDriverFilter, setSelectedDriverFilter] = useState<string>('');
+  const [selectedDriverFilter, setSelectedDriverFilter] = useState<string>('all');
   const [customerStatusFilter, setCustomerStatusFilter] = useState<'all' | CustomerAdvanceStatus>('all');
   const [driverStatusFilter, setDriverStatusFilter] = useState<'all' | DriverExpenseStatus>('all');
 
@@ -76,31 +83,110 @@ const Accounting: React.FC = () => {
   const summaryDateFromObj = useMemo(() => new Date(summaryDateRange.from), [summaryDateRange.from]);
   const summaryDateToObj = useMemo(() => new Date(summaryDateRange.to), [summaryDateRange.to]);
 
-  // Data & Mutations
-  const {
-    drivers,
-    summary,
-    deposits,
-    payments,
-    customerAdvances,
-    isLoading,
-  } = useAccountingData({
-    isAuthenticated,
-    isAccountant,
-    dateFrom: dateFromObj,
-    dateTo: dateToObj,
-    summaryDateFrom: summaryDateFromObj,
-    summaryDateTo: summaryDateToObj,
-    selectedDriverFilter,
-    customerStatusFilter,
-    driverStatusFilter,
+  // Query client for mutations
+  const qc = useQueryClient();
+
+  // Data queries
+  const enabled = isAuthenticated && isAccountant;
+
+  const driversQ = useQuery({
+    queryKey: ['drivers'],
+    queryFn: getDrivers,
+    enabled,
   });
 
-  const {
-    depositMut,
-    paymentMut,
-    customerAdvanceStatusMut,
-  } = useAccountingMutations();
+  const summaryQ = useQuery({
+    queryKey: ['revenue-summary', summaryDateFromObj, summaryDateToObj],
+    queryFn: () => getRevenueSummary(summaryDateFromObj, summaryDateToObj),
+    enabled,
+  });
+
+  const depositsQ = useQuery({
+    queryKey: ['deposits'],
+    queryFn: getDeposits,
+    enabled,
+  });
+
+  const paymentsQ = useQuery({
+    queryKey: ['payments'],
+    queryFn: getPayments,
+    enabled,
+  });
+
+  const customerAdvancesQ = useQuery({
+    queryKey: ['customer-advances', customerStatusFilter],
+    queryFn: () =>
+      getCustomerAdvances(
+        customerStatusFilter === 'all' ? undefined : { status: customerStatusFilter },
+      ),
+    enabled,
+  });
+
+  // Client-side date filtering helper
+  const isWithinDateRange = useCallback((dateStr: string, from?: Date, to?: Date): boolean => {
+    if (!from && !to) return true;
+    const date = new Date(dateStr);
+    if (from && date < from) return false;
+    if (to) {
+      const endOfDay = new Date(to);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (date > endOfDay) return false;
+    }
+    return true;
+  }, []);
+
+  // Filter data by date range
+  const drivers = driversQ.data || [];
+  const summary = summaryQ.data;
+  const deposits = useMemo(
+    () => depositsQ.data?.filter(deposit => isWithinDateRange(deposit.createdAt, dateFromObj, dateToObj)) || [],
+    [depositsQ.data, dateFromObj, dateToObj, isWithinDateRange]
+  );
+  const payments = useMemo(
+    () => paymentsQ.data?.filter(payment => isWithinDateRange(payment.collectedAt, dateFromObj, dateToObj)) || [],
+    [paymentsQ.data, dateFromObj, dateToObj, isWithinDateRange]
+  );
+  const customerAdvances = useMemo(
+    () => customerAdvancesQ.data?.filter(advance => isWithinDateRange(advance.collectedAt, dateFromObj, dateToObj)) || [],
+    [customerAdvancesQ.data, dateFromObj, dateToObj, isWithinDateRange]
+  );
+  const isLoading = driversQ.isLoading || summaryQ.isLoading || depositsQ.isLoading || paymentsQ.isLoading || customerAdvancesQ.isLoading;
+
+  // Mutations
+  const depositMut = useMutation({
+    mutationFn: createDeposit,
+    onSuccess: () => {
+      toast({ title: 'Đã nộp tiền', description: 'Cập nhật công nợ tài xế thành công' });
+      qc.invalidateQueries({ queryKey: ['drivers'] });
+      qc.invalidateQueries({ queryKey: ['revenue-summary'] });
+      qc.invalidateQueries({ queryKey: ['deposits'] });
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: 'Lỗi',
+        description: (e instanceof Error ? e.message : String(e)) || 'Không thể nộp tiền',
+        variant: 'destructive',
+      });
+    },
+  });
+
+
+
+  const customerAdvanceStatusMut = useMutation({
+    mutationFn: updateCustomerAdvanceStatus,
+    onSuccess: () => {
+      toast({ title: 'Đã cập nhật', description: 'Trạng thái phiếu ứng trước đã thay đổi' });
+      qc.invalidateQueries({ queryKey: ['customer-advances'] });
+      qc.invalidateQueries({ queryKey: ['revenue-summary'] });
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: 'Không thể cập nhật',
+        description: (e instanceof Error ? e.message : String(e)) || 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Handlers
   const handleDeposit = (data: {
@@ -112,14 +198,13 @@ const Accounting: React.FC = () => {
     depositMut.mutate(data);
   };
 
-  const handlePayment = (data: {
-    tripId: string;
+  const handlePaymentDeposit = (data: {
     driverId: string;
     amount: number;
-    method: 'cash' | 'transfer';
+    note: string;
     attachments: File[];
   }) => {
-    paymentMut.mutate(data);
+    depositMut.mutate(data);
   };
 
   const handleCustomerAction = (
@@ -297,8 +382,8 @@ const Accounting: React.FC = () => {
             <DatePickerField value={dateFrom} onChange={setDateFrom} placeholder="Từ ngày" allowClear />
             <DatePickerField value={dateTo} onChange={setDateTo} placeholder="Đến ngày" allowClear />
             <Select
-              value={selectedDriverFilter || 'all'}
-              onValueChange={(value) => setSelectedDriverFilter(value === 'all' ? '' : value)}
+              value={selectedDriverFilter}
+              onValueChange={setSelectedDriverFilter}
             >
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Tất cả tài xế" />
@@ -317,7 +402,7 @@ const Accounting: React.FC = () => {
               onClick={() => {
                 setDateFrom(currentDate);
                 setDateTo(currentDate);
-                setSelectedDriverFilter('');
+                setSelectedDriverFilter('all');
               }}
             >
               Xóa lọc
@@ -333,8 +418,8 @@ const Accounting: React.FC = () => {
           {/* Payment Recording Form & History */}
           <PaymentRecordingForm
             drivers={drivers}
-            onSubmit={handlePayment}
-            isSubmitting={paymentMut.isPending}
+            onSubmit={handlePaymentDeposit}
+            isSubmitting={depositMut.isPending}
           />
 
           <Card>

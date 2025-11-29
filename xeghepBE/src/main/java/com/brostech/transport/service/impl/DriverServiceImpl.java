@@ -34,6 +34,7 @@ public class DriverServiceImpl implements DriverService {
     private final PasswordEncoder passwordEncoder;
     private final TripRepository tripRepository;
     private final com.brostech.transport.jpa.repository.TripPaymentRepository tripPaymentRepository;
+    private final com.brostech.transport.jpa.repository.DepositRecordRepository depositRecordRepository;
     
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat dateOnlyFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -227,26 +228,26 @@ public class DriverServiceImpl implements DriverService {
                         endOfDay
                 );
 
-        // Get all trip IDs to query payments
+        // Get all trip IDs to query deposits
         List<Long> tripIds = trips.stream()
                 .map(com.brostech.transport.jpa.entity.Trip::getId)
                 .collect(java.util.stream.Collectors.toList());
 
-        // Query all payments for these trips
-        List<com.brostech.transport.jpa.entity.TripPayment> allPayments = tripPaymentRepository.findAll().stream()
-                .filter(p -> tripIds.contains(p.getTripId()))
+        // Query all deposits for these trips (money driver deposited back to company)
+        List<com.brostech.transport.jpa.entity.DepositRecord> allDeposits = depositRecordRepository.findAll().stream()
+                .filter(d -> d.getTripId() != null && tripIds.contains(d.getTripId()))
                 .collect(java.util.stream.Collectors.toList());
 
-        // Calculate paid amount per trip
-        java.util.Map<Long, Double> paidPerTrip = new java.util.HashMap<>();
-        for (com.brostech.transport.jpa.entity.TripPayment payment : allPayments) {
-            paidPerTrip.merge(payment.getTripId(), payment.getAmount(), Double::sum);
+        // Calculate deposited amount per trip
+        java.util.Map<Long, Double> depositedPerTrip = new java.util.HashMap<>();
+        for (com.brostech.transport.jpa.entity.DepositRecord deposit : allDeposits) {
+            depositedPerTrip.merge(deposit.getTripId(), deposit.getAmount(), Double::sum);
         }
         
         List<com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary> tripSummaries = trips.stream()
                 .map(trip -> {
                     double amount = trip.getPrice().doubleValue();
-                    double alreadyPaid = paidPerTrip.getOrDefault(trip.getId(), 0.0);
+                    double alreadyDeposited = depositedPerTrip.getOrDefault(trip.getId(), 0.0);
                     
                     return com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary.builder()
                             .tripId(trip.getId())
@@ -254,7 +255,7 @@ public class DriverServiceImpl implements DriverService {
                             .dropoffLocation(trip.getDropoffLocation())
                             .amount(amount)
                             .status(trip.getStatus().name())
-                            .alreadyPaid(alreadyPaid)
+                            .alreadyPaid(alreadyDeposited) // Amount already deposited back to company
                             .build();
                 })
                 .collect(java.util.stream.Collectors.toList());

@@ -12,4 +12,7 @@ public class DepositRecordRequest {
     private Double amount;
     
     private String note;
+    
+    // Optional: For auto-allocation to trips on specific date
+    private String paymentDate; // Format: yyyy-MM-dd
 }

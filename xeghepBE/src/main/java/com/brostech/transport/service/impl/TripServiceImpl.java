@@ -430,6 +430,8 @@ public class TripServiceImpl implements TripService {
                 .driverId(trip.getDriverId())
                 .driverName(trip.getDriverName())
                 .status(TripGroup.GroupStatus.DANG_GHEP)
+                .pickupDate(trip.getPickupTime() != null ? 
+                    trip.getPickupTime().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate() : null)
                 .totalPassengers(trip.getPassengers())
                 .totalRevenue(trip.getPrice() != null ? trip.getPrice().doubleValue() : null)
                 .build();

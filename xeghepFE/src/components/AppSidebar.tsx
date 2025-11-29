@@ -12,15 +12,15 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, Phone, GitMerge, Truck, Car, UserCircle, Users, Lock, LogOut, Home, Banknote, Wallet } from 'lucide-react';
-import { getCurrentUser, logout } from '@/data/auth';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const currentUser = getCurrentUser();
+  const { user: currentUser, logout } = useAuth();
   const role = currentUser?.role ? currentUser.role.toString().toLowerCase() : undefined;
   const menuSections = (() => {
     if (role === 'call_center') {
@@ -107,7 +107,8 @@ export function AppSidebar() {
       title: "Đã đăng xuất",
       description: "Hẹn gặp lại bạn!",
     });
-    navigate('/login');
+    // Use window.location to force full page reload and avoid navigation blocking
+    window.location.href = '/login';
   };
 
   return (
@@ -139,7 +140,13 @@ export function AppSidebar() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        navigate(item.href, { replace: true });
+                        
+                        // Workaround: Use full page reload when navigating from /accounting
+                        if (location.pathname === '/accounting' && item.href !== '/accounting') {
+                          window.location.href = item.href;
+                        } else {
+                          navigate(item.href, { replace: true });
+                        }
                       }}
                     >
                       <item.icon className="h-4 w-4" />

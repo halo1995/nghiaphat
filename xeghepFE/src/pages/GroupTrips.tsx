@@ -576,6 +576,17 @@ const GroupTrips = () => {
             <div className="grid grid-cols-1 gap-6">
               {filteredGroups.map((group, index) => {
                 const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
+                
+                // Debug: Log if group has trips but groupTrips is empty
+                if (group.tripIds.length > 0 && groupTrips.length === 0) {
+                  console.log('Group has tripIds but no matching trips found:', {
+                    groupId: group.id,
+                    groupName: group.name,
+                    tripIds: group.tripIds,
+                    availableTrips: trips.map(t => ({ id: t.id, fullVehicle: t.fullVehicle }))
+                  });
+                }
+                
                 const groupLocked = isGroupLocked(group);
                 const canEditGroup = !groupLocked && group.status !== 'Đang chạy' && group.status !== 'Hoàn thành';
                 const isFullVehicleGroup = groupFullVehicleMap.get(group.id) === true;

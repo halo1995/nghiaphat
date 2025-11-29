@@ -33,7 +33,7 @@ export const DepositHistoryTable: React.FC<DepositHistoryTableProps> = ({
     onOpenAttachment,
 }) => {
     const filteredDeposits = useMemo(() => {
-        if (!selectedDriverFilter) return data;
+        if (!selectedDriverFilter || selectedDriverFilter === 'all') return data;
         return data.filter((deposit) => deposit.driverId === selectedDriverFilter);
     }, [data, selectedDriverFilter]);
 

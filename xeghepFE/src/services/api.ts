@@ -453,6 +453,7 @@ export interface TripGroupResponse {
   driverName: string | null;
   status: TripGroupStatus;
   createdAt: string;
+  pickupDate: string | null;
   totalPassengers: number | null;
   totalRevenue: number | null;
 }

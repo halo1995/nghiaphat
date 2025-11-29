@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
     SelectContent,
@@ -16,15 +17,14 @@ import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
 import { useToast } from '@/hooks/use-toast';
 import { Driver } from '@/data/drivers';
 import { getDriverDailySummary } from '@/data/accounting';
-import { ChevronDown, ChevronUp, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface PaymentRecordingFormProps {
     drivers: Driver[];
     onSubmit: (data: {
-        tripId: string;
         driverId: string;
         amount: number;
-        method: 'cash' | 'transfer';
+        note: string;
         attachments: File[];
         paymentDate?: string;
     }) => void;
@@ -38,17 +38,17 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
 }) => {
     const { toast } = useToast();
     const [paymentForm, setPaymentForm] = useState({
-        date: new Date().toISOString().split('T')[0], // Default today
+        date: new Date().toISOString().split('T')[0],
         driverId: '',
         amount: '',
-        method: 'cash' as 'cash' | 'transfer',
+        note: '',
     });
     const [paymentImages, setPaymentImages] = useState<File[]>([]);
     const [paymentImagesLoading, setPaymentImagesLoading] = useState(false);
     const [showTripDetails, setShowTripDetails] = useState(false);
     const paymentFileInputRef = useRef<HTMLInputElement | null>(null);
 
-    // Auto-query daily summary when date + driver selected
+    // Query daily summary when date + driver selected
     const { data: dailySummary, isLoading: isSummaryLoading } = useQuery({
         queryKey: ['driver-daily-summary', paymentForm.driverId, paymentForm.date],
         queryFn: () => getDriverDailySummary(paymentForm.driverId, paymentForm.date),
@@ -94,21 +94,10 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
             return;
         }
 
-        if (!paymentForm.date) {
-            toast({
-                title: 'Thiếu ngày nộp tiền',
-                description: 'Vui lòng chọn ngày nộp tiền',
-                variant: 'destructive',
-            });
-            return;
-        }
-
-        // Send payment with date, tripId is optional (empty string will be converted to null)
         onSubmit({
-            tripId: '', // Empty string will be converted to null in backend
             driverId: paymentForm.driverId,
             amount,
-            method: paymentForm.method,
+            note: paymentForm.note,
             attachments: paymentImages,
             paymentDate: paymentForm.date,
         });
@@ -117,20 +106,15 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
             date: new Date().toISOString().split('T')[0],
             driverId: '',
             amount: '',
-            method: 'cash'
+            note: '',
         });
         setPaymentImages([]);
-        setShowTripDetails(false);
     };
-
-    const expectedAmount = dailySummary?.expectedAmount || 0;
-    const actualAmount = Number(paymentForm.amount || 0);
-    const difference = actualAmount - expectedAmount;
 
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Ghi nhận thu tiền từ tài xế</CardTitle>
+                <CardTitle>Ghi nhận tiền tài xế nộp về công ty</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <input
@@ -142,10 +126,10 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                     onChange={handlePaymentImagesSelect}
                 />
 
-                {/* Date + Driver Selection */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Date + Driver + Amount */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
-                        <label className="text-sm text-muted-foreground">Ngày nộp tiền *</label>
+                        <label className="text-sm text-muted-foreground">Ngày *</label>
                         <DatePickerField
                             value={paymentForm.date}
                             onChange={(value) =>
@@ -174,148 +158,128 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                             </SelectContent>
                         </Select>
                     </div>
-                </div>
-
-                {/* Expected Amount Display */}
-                {paymentForm.driverId && paymentForm.date && (
-                    <div className="border rounded-lg p-3 bg-blue-50">
-                        {isSummaryLoading ? (
-                            <div className="text-sm text-muted-foreground">🔄 Đang tải...</div>
-                        ) : dailySummary && dailySummary.trips.length > 0 ? (
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm font-medium text-blue-900">
-                                            📊 Tổng cần nộp: {expectedAmount.toLocaleString('vi-VN')} ₫
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            🚗 {dailySummary.trips.length} chuyến
-                                        </div>
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setShowTripDetails(!showTripDetails)}
-                                    >
-                                        {showTripDetails ? (
-                                            <>
-                                                Thu gọn <ChevronUp className="ml-1 h-4 w-4" />
-                                            </>
-                                        ) : (
-                                            <>
-                                                Xem chi tiết <ChevronDown className="ml-1 h-4 w-4" />
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-
-                                {showTripDetails && (
-                                    <div className="mt-3 pt-3 border-t space-y-2">
-                                        {dailySummary.trips.map((trip) => (
-                                            <div
-                                                key={trip.tripId}
-                                                className="text-xs bg-white rounded px-2 py-1.5 flex justify-between"
-                                            >
-                                                <div className="flex-1">
-                                                    <span className="font-medium">#{trip.tripId}</span>
-                                                    <span className="text-muted-foreground ml-2">
-                                                        {trip.pickupLocation} → {trip.dropoffLocation}
-                                                    </span>
-                                                </div>
-                                                <span className="font-medium">
-                                                    {trip.amount.toLocaleString('vi-VN')} ₫
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-muted-foreground">
-                                ℹ️ Không có chuyến nào cần thu tiền trong ngày này
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Amount + Method + Submit */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                     <div className="space-y-1">
-                        <label className="text-sm text-muted-foreground">Số tiền thực nộp (₫) *</label>
+                        <label className="text-sm text-muted-foreground">Số tiền (₫) *</label>
                         <Input
                             type="number"
                             min={0}
                             value={paymentForm.amount}
-                            onChange={(event) =>
-                                setPaymentForm((prev) => ({ ...prev, amount: event.target.value }))
+                            onChange={(e) =>
+                                setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))
                             }
-                            placeholder="Ví dụ: 500000"
+                            placeholder="Nhập số tiền"
                         />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-sm text-muted-foreground">Hình thức</label>
-                        <Select
-                            value={paymentForm.method}
-                            onValueChange={(value: 'cash' | 'transfer') =>
-                                setPaymentForm((prev) => ({ ...prev, method: value }))
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="cash">Tiền mặt</SelectItem>
-                                <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="md:col-span-2 flex gap-2">
-                        <Button
-                            className="flex-1"
-                            disabled={isSubmitting || paymentImagesLoading || isSummaryLoading}
-                            onClick={handleSubmit}
-                        >
-                            Ghi nhận
-                        </Button>
                     </div>
                 </div>
 
-                {/* Difference Warning */}
-                {expectedAmount > 0 && actualAmount > 0 && difference !== 0 && (
-                    <div className={`rounded-lg p-3 flex items-start gap-2 ${difference < 0 ? 'bg-orange-50 text-orange-900' : 'bg-amber-50 text-amber-900'
-                        }`}>
-                        <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm">
-                            {difference < 0 ? (
-                                <>
-                                    <strong>Thiếu {Math.abs(difference).toLocaleString('vi-VN')} ₫</strong>
-                                    <div className="text-xs mt-1">Tài xế nợ lại phần còn thiếu</div>
-                                </>
-                            ) : (
-                                <>
-                                    <strong>Thừa {difference.toLocaleString('vi-VN')} ₫</strong>
-                                    <div className="text-xs mt-1">Số tiền thừa sẽ được ghi nhận tạm ứng</div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
+                {/* Summary & Trip Details */}
+                {dailySummary && dailySummary.trips.length > 0 && (() => {
+                    const totalDebt = dailySummary.expectedAmount;
+                    const totalDeposited = dailySummary.trips.reduce((sum, trip) => sum + trip.alreadyPaid, 0);
+                    const remainingDebt = totalDebt - totalDeposited;
+                    const depositAmount = Number(paymentForm.amount || 0);
+                    const afterDeposit = remainingDebt - depositAmount;
 
-                {/* Match Confirmation */}
-                {expectedAmount > 0 && actualAmount === expectedAmount && (
-                    <div className="rounded-lg p-3 bg-green-50 text-green-900 flex items-center gap-2">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="text-sm font-medium">Số tiền khớp chính xác!</span>
-                    </div>
-                )}
+                    return (
+                        <>
+                            {/* Summary Card */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Tổng giá trị chuyến:</span>
+                                    <span className="font-semibold">{totalDebt.toLocaleString('vi-VN')}đ</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Đã nộp trước đó:</span>
+                                    <span className="font-semibold text-green-600">-{totalDeposited.toLocaleString('vi-VN')}đ</span>
+                                </div>
+                                <div className="border-t border-blue-300 pt-2 flex justify-between">
+                                    <span className="text-sm font-medium">Còn thiếu:</span>
+                                    <span className="font-bold text-orange-600">{remainingDebt.toLocaleString('vi-VN')}đ</span>
+                                </div>
+                                {depositAmount > 0 && (
+                                    <>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Số tiền nộp:</span>
+                                            <span className="font-semibold text-blue-600">-{depositAmount.toLocaleString('vi-VN')}đ</span>
+                                        </div>
+                                        <div className="border-t border-blue-300 pt-2 flex justify-between">
+                                            <span className="text-sm font-medium">Sau khi nộp:</span>
+                                            <span className={`font-bold ${afterDeposit <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                                                {afterDeposit <= 0 ? '✓ Đã đủ' : `${afterDeposit.toLocaleString('vi-VN')}đ`}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
 
-                {/* Image Attachments */}
+                            {/* Trip Details */}
+                            <div className="border rounded-lg p-3 space-y-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowTripDetails(!showTripDetails)}
+                                    className="w-full justify-between"
+                                >
+                                    <span className="text-sm font-medium">
+                                        Chi tiết {dailySummary.trips.length} chuyến
+                                    </span>
+                                    {showTripDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </Button>
+                                {showTripDetails && (
+                                    <div className="space-y-2 pt-2">
+                                        {dailySummary.trips.map((trip) => {
+                                            const tripRemaining = trip.amount - trip.alreadyPaid;
+                                            return (
+                                                <div key={trip.tripId} className="text-xs p-2 bg-gray-50 rounded">
+                                                    <div className="flex justify-between">
+                                                        <span className="font-medium">#{trip.tripId}</span>
+                                                        <span className="text-blue-600">{trip.amount.toLocaleString('vi-VN')}đ</span>
+                                                    </div>
+                                                    <div className="text-muted-foreground mt-1">
+                                                        {trip.pickupLocation} → {trip.dropoffLocation}
+                                                    </div>
+                                                    <div className="flex justify-between mt-1">
+                                                        {trip.alreadyPaid > 0 && (
+                                                            <span className="text-green-600">
+                                                                Đã nộp: {trip.alreadyPaid.toLocaleString('vi-VN')}đ
+                                                            </span>
+                                                        )}
+                                                        <span className={tripRemaining > 0 ? 'text-orange-600' : 'text-green-600'}>
+                                                            {tripRemaining > 0 ? `Còn: ${tripRemaining.toLocaleString('vi-VN')}đ` : '✓ Đã đủ'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    );
+                })()}
+
+                {/* Note */}
+                <div className="space-y-1">
+                    <label className="text-sm text-muted-foreground">Ghi chú</label>
+                    <Textarea
+                        rows={2}
+                        value={paymentForm.note}
+                        onChange={(e) =>
+                            setPaymentForm((prev) => ({ ...prev, note: e.target.value }))
+                        }
+                        placeholder="Ghi chú về khoản nộp tiền..."
+                    />
+                </div>
+
+                {/* Attachments */}
                 <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2 items-center">
+                    <label className="text-sm text-muted-foreground">Ảnh chứng từ</label>
+                    <div className="flex flex-wrap items-center gap-2">
                         <Button
                             type="button"
                             variant="outline"
+                            size="sm"
                             disabled={paymentImagesLoading}
                             onClick={() => paymentFileInputRef.current?.click()}
                         >
@@ -327,6 +291,7 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                             <Button
                                 type="button"
                                 variant="ghost"
+                                size="sm"
                                 onClick={() => setPaymentImages([])}
                             >
                                 Xóa ảnh
@@ -339,13 +304,22 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                     {paymentImages.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                             {paymentImages.map((file, idx) => (
-                                <Badge key={`payment-image-${idx}`} variant="outline">
+                                <Badge key={`payment-img-${idx}`} variant="outline">
                                     {file.name}
                                 </Badge>
                             ))}
                         </div>
                     )}
                 </div>
+
+                {/* Submit */}
+                <Button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || paymentImagesLoading}
+                    className="w-full"
+                >
+                    {isSubmitting ? 'Đang xử lý...' : 'Ghi nhận nộp tiền'}
+                </Button>
             </CardContent>
         </Card>
     );

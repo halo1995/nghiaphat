@@ -34,7 +34,7 @@ export const PaymentHistoryTable: React.FC<PaymentHistoryTableProps> = ({
     onOpenAttachment,
 }) => {
     const filteredPayments = useMemo(() => {
-        if (!selectedDriverFilter) return data;
+        if (!selectedDriverFilter || selectedDriverFilter === 'all') return data;
         return data.filter((payment) => payment.driverId === selectedDriverFilter);
     }, [data, selectedDriverFilter]);
 

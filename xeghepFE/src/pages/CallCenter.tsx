@@ -1020,7 +1020,7 @@ const CallCenter = () => {
                             {/* Actions Row */}
                             <div className="flex items-center justify-end gap-2 mt-auto">
                               {/* Primary Action based on Status */}
-                              {trip.status === 'Chờ xác nhận' ? (
+                              {trip.status === 'Chờ xác nhận' && (
                                 <Button
                                   size="sm"
                                   className="h-8 text-xs bg-green-600 hover:bg-green-700 gap-1"
@@ -1028,30 +1028,31 @@ const CallCenter = () => {
                                 >
                                   <CheckCircle size={12} /> Xác nhận
                                 </Button>
-                              ) : (
-                                allowCustomerFinance && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 text-xs gap-1"
-                                    disabled={trip.status === 'Đã hủy' || trip.status === 'Hoàn thành'}
-                                    onClick={() => {
-                                      setSelectedTripForAdvance(trip);
-                                      setCustomerAdvanceForm({
-                                        tripId: String(trip.id ?? ''),
-                                        customerName: trip.customerName,
-                                        customerPhone: trip.customerPhone,
-                                        amount: '',
-                                        method: 'cash',
-                                        receiptCode: '',
-                                        note: '',
-                                      });
-                                      setFinanceDialogOpen(true);
-                                    }}
-                                  >
-                                    <Wallet size={12} /> Ứng trước
-                                  </Button>
-                                )
+                              )}
+                              
+                              {/* Customer Advance Button */}
+                              {allowCustomerFinance && 
+                               !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs gap-1"
+                                  onClick={() => {
+                                    setSelectedTripForAdvance(trip);
+                                    setCustomerAdvanceForm({
+                                      tripId: String(trip.id ?? ''),
+                                      customerName: trip.customerName,
+                                      customerPhone: trip.customerPhone,
+                                      amount: '',
+                                      method: 'cash',
+                                      receiptCode: '',
+                                      note: '',
+                                    });
+                                    setFinanceDialogOpen(true);
+                                  }}
+                                >
+                                  <Wallet size={12} /> Ứng trước
+                                </Button>
                               )}
 
                               {/* More Actions Menu */}

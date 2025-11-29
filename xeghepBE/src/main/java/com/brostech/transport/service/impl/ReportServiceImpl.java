@@ -127,6 +127,9 @@ public class ReportServiceImpl implements ReportService {
             List<DepositRecord> depositRecords = depositRecordRepository.findByCreatedAtBetween(fromDate, toDate);
             createDepositHistorySheet(workbook, headerStyle, currencyStyle, dateStyle, depositRecords);
 
+            // Sheet 8: Tổng hợp chuyến đi
+            createTripSummarySheet(workbook, headerStyle, currencyStyle, dateStyle, fromDate, toDate);
+
             // Write to byte array
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             workbook.write(outputStream);
@@ -683,6 +686,128 @@ public class ReportServiceImpl implements ReportService {
             cache.put(tripId, trip);
         }
         return trip;
+    }
+
+    private void createTripSummarySheet(Workbook workbook, CellStyle headerStyle,
+                                       CellStyle currencyStyle, CellStyle dateStyle,
+                                       Date fromDate, Date toDate) {
+        Sheet sheet = workbook.createSheet("Tổng hợp chuyến đi");
+        
+        // Header
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"STT", "Mã chuyến", "Ngày hoàn thành", "Tài xế", "Khách hàng", "SĐT", 
+                           "Điểm đón", "Điểm trả", "Loại", "Giá chuyến", "Đã thu từ khách", 
+                           "Đã nộp về CT", "Còn phải nộp", "Trạng thái", "Ghi chú"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+        
+        // Query completed trips
+        List<Trip> trips = tripRepository.findAll().stream()
+                .filter(trip -> trip.getStatus() == Trip.TripStatus.HOAN_THANH)
+                .filter(trip -> trip.getCompletedAt() != null && 
+                               !trip.getCompletedAt().before(fromDate) && 
+                               !trip.getCompletedAt().after(toDate))
+                .collect(Collectors.toList());
+        
+        // Sort by completed date
+        trips.sort(Comparator.comparing(Trip::getCompletedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        
+        // Get all trip IDs
+        List<Long> tripIds = trips.stream().map(Trip::getId).collect(Collectors.toList());
+        
+        // Query payments and deposits
+        List<TripPayment> allPayments = tripPaymentRepository.findAll().stream()
+                .filter(p -> tripIds.contains(p.getTripId()))
+                .collect(Collectors.toList());
+        
+        List<DepositRecord> allDeposits = depositRecordRepository.findAll().stream()
+                .filter(d -> d.getTripId() != null && tripIds.contains(d.getTripId()))
+                .collect(Collectors.toList());
+        
+        // Calculate per trip
+        Map<Long, Double> collectedPerTrip = new HashMap<>();
+        for (TripPayment payment : allPayments) {
+            collectedPerTrip.merge(payment.getTripId(), payment.getAmount(), Double::sum);
+        }
+        
+        Map<Long, Double> depositedPerTrip = new HashMap<>();
+        for (DepositRecord deposit : allDeposits) {
+            depositedPerTrip.merge(deposit.getTripId(), deposit.getAmount(), Double::sum);
+        }
+        
+        // Populate data
+        int rowNum = 1;
+        int stt = 1;
+        Map<Long, User> userCache = new HashMap<>();
+        
+        for (Trip trip : trips) {
+            Row row = sheet.createRow(rowNum++);
+            row.createCell(0).setCellValue(stt++);
+            row.createCell(1).setCellValue("#" + trip.getId());
+            
+            // Completed date
+            Cell dateCell = row.createCell(2);
+            if (trip.getCompletedAt() != null) {
+                dateCell.setCellValue(trip.getCompletedAt());
+                dateCell.setCellStyle(dateStyle);
+            }
+            
+            // Driver
+            row.createCell(3).setCellValue(getUserName(trip.getDriverId(), userCache));
+            
+            // Customer info
+            row.createCell(4).setCellValue(trip.getCustomerName() != null ? trip.getCustomerName() : "");
+            row.createCell(5).setCellValue(trip.getCustomerPhone() != null ? trip.getCustomerPhone() : "");
+            
+            // Locations
+            row.createCell(6).setCellValue(trip.getPickupLocation() != null ? trip.getPickupLocation() : "");
+            row.createCell(7).setCellValue(trip.getDropoffLocation() != null ? trip.getDropoffLocation() : "");
+            
+            // Type
+            String tripType = Boolean.TRUE.equals(trip.getFullVehicle()) ? "Bao xe" : 
+                            (trip.getPassengers() != null ? trip.getPassengers() + " người" : "");
+            row.createCell(8).setCellValue(tripType);
+            
+            // Price
+            Cell priceCell = row.createCell(9);
+            double price = trip.getPrice() != null ? trip.getPrice().doubleValue() : 0.0;
+            priceCell.setCellValue(price);
+            priceCell.setCellStyle(currencyStyle);
+            
+            // Collected from customer
+            Cell collectedCell = row.createCell(10);
+            double collected = collectedPerTrip.getOrDefault(trip.getId(), 0.0);
+            collectedCell.setCellValue(collected);
+            collectedCell.setCellStyle(currencyStyle);
+            
+            // Deposited to company
+            Cell depositedCell = row.createCell(11);
+            double deposited = depositedPerTrip.getOrDefault(trip.getId(), 0.0);
+            depositedCell.setCellValue(deposited);
+            depositedCell.setCellStyle(currencyStyle);
+            
+            // Remaining
+            Cell remainingCell = row.createCell(12);
+            double remaining = price - deposited;
+            remainingCell.setCellValue(remaining);
+            remainingCell.setCellStyle(currencyStyle);
+            
+            // Status
+            String status = deposited >= price ? "✓ Đã đủ" : 
+                           deposited > 0 ? "Còn thiếu" : "Chưa nộp";
+            row.createCell(13).setCellValue(status);
+            
+            // Note
+            row.createCell(14).setCellValue(trip.getNotes() != null ? trip.getNotes() : "");
+        }
+        
+        // Auto-size columns
+        for (int i = 0; i < headers.length; i++) {
+            sheet.autoSizeColumn(i);
+        }
     }
 }
 

@@ -263,10 +263,14 @@ class ApiService {
   }
 
   // Trip APIs
-  async getTrips(status?: string, date?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripResponse>> {
+  async getTrips(status?: string, date?: string | Date, page: number = 0, size: number = 100): Promise<ApiResponse<TripResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (status) params.append('status', status);
-    if (date) params.append('date', date);
+    if (date) {
+      // Convert Date object to ISO string if needed
+      const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
+      params.append('date', dateStr);
+    }
 
     const response = await fetch(`${this.buildUrl('/trips')}?${params}`, {
       headers: this.getAuthHeaders(),
@@ -619,7 +623,7 @@ class ApiService {
   }
 
   // Trip group APIs
-  async getTripGroups(status?: string, date?: string, page: number = 0, size: number = 100): Promise<ApiResponse<TripGroupResponse>> {
+  async getTripGroups(status?: string, date?: string | Date, page: number = 0, size: number = 100): Promise<ApiResponse<TripGroupResponse>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
@@ -628,7 +632,9 @@ class ApiService {
       params.append('status', status);
     }
     if (date) {
-      params.append('date', date);
+      // Convert Date object to ISO string if needed
+      const dateStr = date instanceof Date ? date.toISOString().split('T')[0] : date;
+      params.append('date', dateStr);
     }
     const response = await fetch(this.buildUrl(`/trip-groups?${params.toString()}`), {
       method: 'GET',

@@ -356,11 +356,13 @@ export const createDeposit = async (input: {
   amount: number;
   note?: string;
   attachments?: File[];
+  paymentDate?: string;
 }): Promise<DepositRecord> => {
   const request = {
     driverId: Number(input.driverId),
     amount: input.amount,
     note: input.note,
+    paymentDate: input.paymentDate,
   };
   const response = await apiService.createDepositRecord(request, input.attachments ?? []);
   return mapDepositRecord(response);
@@ -522,7 +524,7 @@ export const getDriverDailySummary = async (
     console.warn('Driver daily summary API not available, using fallback calculation');
 
     // Get all trips (we'll filter on client side)
-    const tripsResponse = await apiService.getTrips(undefined, 0, 500);
+    const tripsResponse = await apiService.getTrips(undefined, undefined, 0, 500);
     const allTrips = tripsResponse.content;
 
     // Filter trips for this driver and date

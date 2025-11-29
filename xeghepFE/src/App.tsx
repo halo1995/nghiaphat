@@ -38,26 +38,22 @@ import ApiTest from "@/components/ApiTest";
 
 
 
-// Content wrapper to force remount on location change
-const PageContent = () => {
+// Layout Component - force remount on every location change
+const LayoutWithSidebar = () => {
   const location = useLocation();
   
   React.useEffect(() => {
-    console.log('Page content mounting for:', location.pathname);
+    console.log('Layout mounting for:', location.pathname);
     window.scrollTo(0, 0);
   }, [location.pathname]);
   
-  return <Outlet />;
-};
-
-// Layout Component with location key
-const LayoutWithSidebar = () => {
+  // Force complete remount by using location as key on the entire layout
   return (
-    <SidebarProvider>
+    <SidebarProvider key={location.pathname}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <SidebarInset className="flex-1 w-full min-w-0">
-          <PageContent />
+          <Outlet />
         </SidebarInset>
       </div>
     </SidebarProvider>
