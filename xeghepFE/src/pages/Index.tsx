@@ -37,8 +37,9 @@ const Index = () => {
     enabled: isAuthenticated && !authLoading,
   });
   const { data: tripGroups = [], isLoading: groupsLoading } = useQuery<TripGroup[]>({
-    queryKey: ['dashboard-trip-groups'],
-    queryFn: () => getTripGroups(),
+    queryKey: ['dashboard-trip-groups', defaultDate],
+    queryFn: () => getTripGroups(defaultDate),
+    enabled: isAuthenticated && !authLoading,
   });
 
   const vehicles = vehiclesData?.content ?? [];

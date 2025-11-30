@@ -47,8 +47,8 @@ const Dispatch = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: trips = [], isLoading, error } = useQuery({
-    queryKey: ['trips', defaultDate],
-    queryFn: () => getTrips(defaultDate),
+    queryKey: ['trips', filterDate],
+    queryFn: () => getTrips(filterDate),
     enabled: isAuthenticated && !authLoading,
   });
 
