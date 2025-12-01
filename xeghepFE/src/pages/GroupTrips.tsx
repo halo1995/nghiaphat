@@ -44,15 +44,17 @@ const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const defaultDate = useMemo(() => getTodayLocalDate(), []);
 
+  const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
+
   const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
-    queryKey: ['tripGroups', defaultDate],
-    queryFn: () => getTripGroups(defaultDate),
+    queryKey: ['tripGroups', dateFilter],
+    queryFn: () => getTripGroups(dateFilter),
     enabled: isAuthenticated && !authLoading,
   });
 
   const { data: trips = [] } = useQuery<Trip[]>({
-    queryKey: ['trips', defaultDate],
-    queryFn: () => getTrips(defaultDate),
+    queryKey: ['trips', dateFilter],
+    queryFn: () => getTrips(dateFilter),
     enabled: isAuthenticated && !authLoading,
   });
 
@@ -73,7 +75,6 @@ const GroupTrips = () => {
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('none');
   const [selectedDriverId, setSelectedDriverId] = useState('none');
-  const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'vehicleAssigned' | 'driverAssigned' | 'unassigned'>('all');
 
   const queryClient = useQueryClient();

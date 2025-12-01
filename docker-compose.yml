@@ -8,6 +8,7 @@ services:
     expose:
       - "8080"
     environment:
+      TZ: Asia/Ho_Chi_Minh
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
@@ -56,6 +57,7 @@ services:
     ports:
       - "5432:5432"
     environment:
+      TZ: Asia/Ho_Chi_Minh
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
