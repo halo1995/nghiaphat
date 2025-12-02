@@ -530,8 +530,9 @@ const GroupTrips = () => {
                   value={dateFilter}
                   onChange={(value) => {
                     setDateFilter(value);
+                    // Force refetch with new date
                     queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-                    queryClient.invalidateQueries({ queryKey: ['trips'] });
+                    queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
                   }}
                   allowClear
                   placeholder="Chọn ngày"
