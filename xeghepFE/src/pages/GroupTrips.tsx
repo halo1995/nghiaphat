@@ -42,8 +42,6 @@ const getTodayLocalDate = () => {
 
 const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const defaultDate = useMemo(() => getTodayLocalDate(), []);
-
   const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
 
   const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
@@ -52,10 +50,13 @@ const GroupTrips = () => {
     enabled: isAuthenticated && !authLoading,
   });
 
+  // Load trips with pickupDate matching the selected date
+  // This ensures we only load relevant trips for the groups being displayed
   const { data: trips = [] } = useQuery<Trip[]>({
-    queryKey: ['trips', dateFilter],
-    queryFn: () => getTrips(dateFilter),
+    queryKey: ['trips-for-groups', dateFilter],
+    queryFn: () => getTrips(dateFilter), // Load trips for selected date
     enabled: isAuthenticated && !authLoading,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to reduce re-fetching
   });
 
   const { data: drivers = [] } = useQuery<Driver[]>({
@@ -108,6 +109,12 @@ const GroupTrips = () => {
   const availableTrips = useMemo(() => {
     if (!editingGroup) return [] as Trip[];
     const groupHasFullVehicle = editingGroup.tripIds.some((id) => tripById.get(id)?.fullVehicle);
+    
+    // Get pickup date from first trip in group
+    const groupPickupDate = editingGroup.tripIds.length > 0
+      ? tripById.get(editingGroup.tripIds[0])?.pickupTime?.slice(0, 10)
+      : dateFilter;
+    
     return trips.filter((trip: Trip) => {
       if (trip.pickupConfirmed === true) {
         return false;
@@ -118,9 +125,16 @@ const GroupTrips = () => {
       if (groupHasFullVehicle) {
         return false;
       }
+      
+      // Only show trips with same pickup date as group
+      const tripPickupDate = trip.pickupTime?.slice(0, 10);
+      if (tripPickupDate !== groupPickupDate) {
+        return false;
+      }
+      
       return !trip.groupId && !['Đang đón', 'Đang đi', 'Hoàn thành', 'Đã hủy'].includes(trip.status);
     });
-  }, [editingGroup, trips, tripById]);
+  }, [editingGroup, trips, tripById, dateFilter]);
   const groupFullVehicleMap = useMemo(() =>
     new Map(groups.map(group => [group.id, group.tripIds.some((tripId) => tripById.get(tripId)?.fullVehicle)])),
     [groups, tripById]);

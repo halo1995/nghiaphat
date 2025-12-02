@@ -80,7 +80,7 @@ export ADMIN_PASSWORD=your_admin_password
 # Step 1: Login to get JWT token
 TOKEN=$(curl -s -X POST http://localhost:8080/transport-service/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"your_password"}' \
+  -d '{"username":"admin","password":"1"}' \
   | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 
 # Step 2: Call migration endpoint

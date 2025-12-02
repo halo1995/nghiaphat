@@ -54,7 +54,7 @@ export ADMIN_PASSWORD=your_password
 # Login để lấy token
 TOKEN=$(curl -s -X POST http://localhost:8080/transport-service/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"your_password"}' \
+  -d '{"username":"admin","password":"Xeghepnghiaphat@123"}' \
   | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 
 # Gọi endpoint migration

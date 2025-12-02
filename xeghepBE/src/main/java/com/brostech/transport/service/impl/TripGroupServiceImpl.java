@@ -51,6 +51,10 @@ public class TripGroupServiceImpl implements TripGroupService {
 
     @Override
     public TripGroupDTO create(TripGroupRequest req) {
+        // Validate: All trips must have same pickup date
+        List<Long> tripIds = parseTripIds(req.getTripIds());
+        validateSamePickupDate(tripIds);
+
         TripGroup group = TripGroup.builder()
                 .name(req.getName())
                 .tripIds(req.getTripIds())
@@ -64,7 +68,7 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .build();
 
         // Calculate and set pickup date from trips
-        java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(req.getTripIds()));
+        java.time.LocalDate pickupDate = calculatePickupDate(tripIds);
         group.setPickupDate(pickupDate);
 
         group = tripGroupRepository.save(group);
@@ -123,6 +127,8 @@ public class TripGroupServiceImpl implements TripGroupService {
         if (req.getTripIds() != null) {
             assertTripIdsEditable(req.getTripIds());
             enforceFullVehicleRule(req.getTripIds());
+            // Validate: All trips must have same pickup date
+            validateSamePickupDate(parseTripIds(req.getTripIds()));
         }
 
         group.setName(req.getName());
@@ -211,6 +217,15 @@ public class TripGroupServiceImpl implements TripGroupService {
 
         if (Boolean.TRUE.equals(trip.getPickupConfirmed())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể thêm chuyến đã xác nhận đón vào nhóm");
+        }
+
+        // Validate: Trip must have same pickup date as group
+        if (group.getPickupDate() != null && trip.getPickupTime() != null) {
+            java.time.LocalDate tripPickupDate = new java.sql.Date(trip.getPickupTime().getTime()).toLocalDate();
+            if (!tripPickupDate.equals(group.getPickupDate())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Không thể thêm chuyến có ngày đón khác với nhóm. Nhóm chỉ chứa chuyến cùng ngày đón.");
+            }
         }
 
         String currentTripIds = group.getTripIds();
@@ -391,5 +406,28 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .map(pickupTime -> new java.sql.Date(pickupTime.getTime()).toLocalDate())
                 .min(java.time.LocalDate::compareTo)
                 .orElse(null);
+    }
+
+    /**
+     * Validate that all trips have the same pickup date
+     * Business rule: A group can only contain trips with the same pickup date
+     */
+    private void validateSamePickupDate(List<Long> tripIds) {
+        if (tripIds == null || tripIds.isEmpty()) {
+            return;
+        }
+        
+        List<Trip> trips = tripRepository.findAllById(tripIds);
+        Set<java.time.LocalDate> uniqueDates = trips.stream()
+                .map(Trip::getPickupTime)
+                .filter(pickupTime -> pickupTime != null)
+                .map(pickupTime -> new java.sql.Date(pickupTime.getTime()).toLocalDate())
+                .collect(java.util.stream.Collectors.toSet());
+        
+        if (uniqueDates.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Không thể tạo nhóm với các chuyến có ngày đón khác nhau. " +
+                "Một nhóm chỉ được chứa các chuyến cùng ngày đón.");
+        }
     }
 }

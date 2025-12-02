@@ -54,7 +54,7 @@ export const mapDriverResponseToDriver = (driver: DriverResponse): Driver => ({
 
 // Legacy functions - use useDrivers hook instead
 export const getDrivers = async (): Promise<Driver[]> => {
-  const response = await apiService.getDrivers();
+  const response = await apiService.getDrivers(undefined, 0, 1000); // Get up to 1000 drivers
   return response.content.map(mapDriverResponseToDriver);
 };
 

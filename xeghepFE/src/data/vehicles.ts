@@ -69,7 +69,7 @@ const mapVehicleResponse = (vehicle: VehicleResponse): Vehicle => ({
 });
 
 export const getVehicles = async (): Promise<Vehicle[]> => {
-  const response = await apiService.getVehicles();
+  const response = await apiService.getVehicles(undefined, 0, 1000); // Get up to 1000 vehicles
   return response.content.map(mapVehicleResponse);
 };
 
