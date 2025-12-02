@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,10 +23,14 @@ const getTodayLocalDate = () => {
 const AssignVehicle = () => {
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const defaultDate = useMemo(() => getTodayLocalDate(), []);
+  
+  // Get dateFilter from navigation state, fallback to today
+  const dateFromState = (location.state as { dateFilter?: string })?.dateFilter;
+  const defaultDate = useMemo(() => dateFromState || getTodayLocalDate(), [dateFromState]);
 
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('');
@@ -57,10 +61,19 @@ const AssignVehicle = () => {
     refetchOnReconnect: 'always',
   });
 
+  // Try to get trips from GroupTrips cache first, fallback to fetching if not available
   const { data: trips = [] } = useQuery({
-    queryKey: ['trips', defaultDate],
+    queryKey: ['trips-for-groups', defaultDate],
     queryFn: () => getTrips(defaultDate),
     enabled: isAuthenticated && !authLoading,
+    staleTime: 5 * 60 * 1000, // Reuse cached data from GroupTrips page
+    initialData: () => {
+      // Try to get data from cache first
+      return queryClient.getQueryData(['trips-for-groups', defaultDate]);
+    },
+    initialDataUpdatedAt: () => {
+      return queryClient.getQueryState(['trips-for-groups', defaultDate])?.dataUpdatedAt;
+    },
   });
 
   const group = groups.find(g => g.id === groupId);
@@ -160,8 +173,9 @@ const AssignVehicle = () => {
       // Note: In real app, you'd update vehicle status to 'Đang chạy'
     },
     onSuccess: () => {
+      // Invalidate only the queries that need to be refetched
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
 
       toast({

@@ -346,7 +346,7 @@ const Dispatch = () => {
                     value={filterDate}
                     onChange={(value) => {
                       setFilterDate(value);
-                      queryClient.invalidateQueries({ queryKey: ['trips'] });
+                      // React Query will automatically refetch when queryKey changes
                     }}
                     allowClear
                   />

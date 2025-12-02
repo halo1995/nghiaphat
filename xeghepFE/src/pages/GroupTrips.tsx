@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ const getTodayLocalDate = () => {
 
 const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
 
   const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
@@ -257,8 +258,9 @@ const GroupTrips = () => {
       });
     },
     onSuccess: () => {
+      // Only invalidate queries that need to be refetched
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
       toast({
         title: 'Đã cập nhật nhóm chuyến',
         description: 'Danh sách khách và phương tiện đã được cập nhật',
@@ -303,8 +305,9 @@ const GroupTrips = () => {
       });
     },
     onSuccess: () => {
+      // Only invalidate queries that need to be refetched
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
       toast({
         title: 'Đã loại bỏ chuyến',
         description: 'Chuyến đã được đưa ra khỏi nhóm',
@@ -337,8 +340,9 @@ const GroupTrips = () => {
       await deleteTripGroup(group.id);
     },
     onSuccess: () => {
+      // Only invalidate queries that need to be refetched
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
       toast({
         title: 'Đã xoá nhóm chuyến',
         description: 'Nhóm chuyến đã được xoá và các chuyến đã được trả lại trạng thái ban đầu',
@@ -445,6 +449,12 @@ const GroupTrips = () => {
     setIsDialogOpen(true);
   };
 
+  const handleNavigateToAssignVehicle = (groupId: string) => {
+    navigate(`/assign-vehicle/${groupId}`, {
+      state: { dateFilter }
+    });
+  };
+
   const handleSave = () => {
     if (!editingGroup) return;
     if (isGroupLocked(editingGroup)) {
@@ -530,9 +540,7 @@ const GroupTrips = () => {
                   value={dateFilter}
                   onChange={(value) => {
                     setDateFilter(value);
-                    // Force refetch with new date
-                    queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
-                    queryClient.invalidateQueries({ queryKey: ['trips-for-groups'] });
+                    // React Query will automatically refetch when queryKey changes
                   }}
                   allowClear
                   placeholder="Chọn ngày"
@@ -714,12 +722,14 @@ const GroupTrips = () => {
                             <p className="text-sm text-orange-700 mb-2">
                               ⚠️ Chưa phân xe và tài xế
                             </p>
-                            <Link to={`/assign-vehicle/${group.id}`}>
-                              <Button size="sm" className="gap-2 bg-orange-600 hover:bg-orange-700">
-                                <Truck size={16} />
-                                Phân Xe Ngay
-                              </Button>
-                            </Link>
+                            <Button 
+                              size="sm" 
+                              className="gap-2 bg-orange-600 hover:bg-orange-700"
+                              onClick={() => handleNavigateToAssignVehicle(group.id)}
+                            >
+                              <Truck size={16} />
+                              Phân Xe Ngay
+                            </Button>
                           </div>
                         )}
 
@@ -774,13 +784,14 @@ const GroupTrips = () => {
                         {/* Actions */}
                         {!group.vehicleId && (
                           <div className="mt-4 pt-4 border-t">
-                            <Link to={`/assign-vehicle/${group.id}`}>
-                              <Button className="w-full gap-2 bg-purple-600 hover:bg-purple-700">
-                                <Truck size={20} />
-                                Phân Xe & Tài Xế
-                                <ArrowRight size={16} />
-                              </Button>
-                            </Link>
+                            <Button 
+                              className="w-full gap-2 bg-purple-600 hover:bg-purple-700"
+                              onClick={() => handleNavigateToAssignVehicle(group.id)}
+                            >
+                              <Truck size={20} />
+                              Phân Xe & Tài Xế
+                              <ArrowRight size={16} />
+                            </Button>
                           </div>
                         )}
                       </CardContent>
