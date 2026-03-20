@@ -11,6 +11,7 @@ public class DepositRecordDTO {
     private Long id;
     private Long driverId;
     private Double amount;
+    private String paymentMethod;
     private String createdAt;
     private String note;
     private List<PaymentAttachmentDTO> attachments;

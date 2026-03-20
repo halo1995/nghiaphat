@@ -21,6 +21,7 @@ public class DriverDailySummaryDTO {
         private String pickupLocation;
         private String dropoffLocation;
         private Double amount;
+        private Double customerPrepaid;
         private String status;
         private Double alreadyPaid;
     }

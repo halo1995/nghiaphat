@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Sidebar,
   SidebarContent,
@@ -11,17 +12,32 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Phone, GitMerge, Truck, Car, UserCircle, Users, Lock, LogOut, Home, Banknote, Wallet } from 'lucide-react';
+import { LayoutDashboard, Phone, GitMerge, Truck, Car, UserCircle, Users, Lock, LogOut, Home, Banknote, Wallet, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiService } from '@/services/apiService';
+import { useTheme } from 'next-themes';
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: currentUser, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const role = currentUser?.role ? currentUser.role.toString().toLowerCase() : undefined;
+
+  const isAccountantOrAdmin = role === 'admin' || role === 'accountant';
+  const { data: pendingExpenseCount = 0 } = useQuery({
+    queryKey: ['pendingExpenseCount'],
+    queryFn: async () => {
+      const res = await apiService.getExpenseVouchers({ status: 'PENDING', page: 0, size: 1 });
+      return res.pageable?.totalElements ?? 0;
+    },
+    enabled: isAccountantOrAdmin,
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
   const menuSections = (() => {
     if (role === 'call_center') {
       return [
@@ -62,6 +78,7 @@ export function AppSidebar() {
           items: [
             { title: 'Thu - Nộp', icon: Banknote, href: '/accounting' },
             { title: 'Phiếu Chi', icon: Banknote, href: '/accounting/expenses' },
+            { title: 'Sổ Quỹ Tài Xế', icon: Wallet, href: '/accounting/driver-ledger' },
           ]
         },
       ];
@@ -96,6 +113,7 @@ export function AppSidebar() {
           { title: 'Người Dùng', icon: Users, href: '/users' },
           { title: 'Kế Toán', icon: Banknote, href: '/accounting' },
           { title: 'Phiếu Chi', icon: Banknote, href: '/accounting/expenses' },
+          { title: 'Sổ Quỹ Tài Xế', icon: Wallet, href: '/accounting/driver-ledger' },
         ]
       }
     ];
@@ -151,6 +169,11 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                      {item.href === '/accounting/expenses' && pendingExpenseCount > 0 && (
+                        <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1">
+                          {pendingExpenseCount}
+                        </span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -163,9 +186,9 @@ export function AppSidebar() {
       <SidebarFooter className="border-t p-4">
         {currentUser && (
           <div className="space-y-3">
-            <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-3 p-2 bg-sidebar-accent rounded-lg">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">
+                <p className="text-sm font-semibold text-sidebar-foreground truncate">
                   {currentUser.name}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
@@ -195,6 +218,15 @@ export function AppSidebar() {
               >
                 <LogOut size={14} />
                 Đăng xuất
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title={theme === 'dark' ? 'Bật sáng' : 'Bật tối'}
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
               </Button>
             </div>
           </div>

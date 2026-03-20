@@ -34,6 +34,7 @@ import {
   ExpenseVoucherHistoryResponse,
   ExpenseSummaryResponse,
   DriverDailySummaryResponse,
+  DriverTransactionResponse,
 } from './api';
 
 class ApiService {
@@ -474,6 +475,21 @@ class ApiService {
     return this.handleResponse<AccountingSummaryResponse>(response);
   }
 
+  async exportAccountingReport(from?: string, to?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const query = params.toString();
+    const url = `${this.buildUrl('/payments/summary/export')}${query ? `?${query}` : ''}`;
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+        throw new Error("Không thể xuất báo cáo kế toán");
+    }
+    return response.blob();
+  }
+
   async getDriverDailySummary(driverId: number, date: string): Promise<DriverDailySummaryResponse> {
     const params = new URLSearchParams({ date });
     const response = await fetch(
@@ -481,6 +497,17 @@ class ApiService {
       { headers: this.getAuthHeaders() }
     );
     return this.handleResponse<DriverDailySummaryResponse>(response);
+  }
+
+  async getDriverTransactions(driverId?: number, page: number = 0, size: number = 20): Promise<ApiResponse<DriverTransactionResponse>> {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (driverId != null) {
+      params.append('driverId', driverId.toString());
+    }
+    const response = await fetch(`${this.buildUrl('/payments/driver-transactions')}?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse<ApiResponse<DriverTransactionResponse>>(response);
   }
 
   // Expense voucher APIs
@@ -509,6 +536,31 @@ class ApiService {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<ExpenseVoucherResponse>>(response);
+  }
+
+  async exportExpenseVouchers(options: {
+    status?: string;
+    category?: string;
+    from?: string;
+    to?: string;
+    createdBy?: number;
+    walletId?: number;
+  } = {}): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (options.status) params.append('status', options.status);
+    if (options.category) params.append('category', options.category);
+    if (options.from) params.append('from', options.from);
+    if (options.to) params.append('to', options.to);
+    if (options.createdBy != null) params.append('createdBy', options.createdBy.toString());
+    if (options.walletId != null) params.append('walletId', options.walletId.toString());
+
+    const response = await fetch(`${this.buildUrl('/expenses/export')}?${params}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+        throw new Error("Không thể xuất phiếu chi");
+    }
+    return response.blob();
   }
 
   async getExpenseVoucher(id: number): Promise<ExpenseVoucherResponse> {
@@ -593,23 +645,6 @@ class ApiService {
     return this.handleResponse<ExpenseVoucherHistoryResponse[]>(response);
   }
 
-  async exportAccountingReport(from?: string, to?: string): Promise<Blob> {
-    const params = new URLSearchParams();
-    if (from) params.append('from', from);
-    if (to) params.append('to', to);
-
-    const url = this.buildUrl(`/reports/accounting/export${params.toString() ? '?' + params.toString() : ''}`);
-    const response = await fetch(url, {
-      headers: this.getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Lỗi khi tải báo cáo' }));
-      throw new Error(error.message || 'Lỗi khi tải báo cáo');
-    }
-
-    return response.blob();
-  }
 
   async getExpenseSummary(from?: string, to?: string): Promise<ExpenseSummaryResponse> {
     const params = new URLSearchParams();

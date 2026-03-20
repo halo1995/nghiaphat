@@ -8,6 +8,9 @@ import { useVehicles, useDrivers } from '@/hooks/useApi';
 import { getTrips, getTripGroups, type Trip, type TripGroup } from '@/data/trips';
 import { motion } from 'framer-motion';
 import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import {
   Car,
   Route,
   Users,
@@ -243,6 +246,68 @@ const Index = () => {
               </motion.div>
             ))}
           </div>
+
+          {/* Analytics Charts */}
+          {ready && trips.length > 0 && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Phân bổ Trạng thái</CardTitle>
+                  <p className="text-sm text-muted-foreground">Tỷ lệ chuyến theo trạng thái hôm nay</p>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Chờ xử lý', value: pendingTrips.length },
+                          { name: 'Đang thực hiện', value: inProgressTrips.length },
+                          { name: 'Hoàn thành', value: completedTrips.length },
+                          { name: 'Đã hủy', value: cancelledTrips.length },
+                        ].filter(d => d.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={95}
+                        paddingAngle={3}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {['#f59e0b', '#8b5cf6', '#10b981', '#ef4444'].map((color, idx) => (
+                          <Cell key={idx} fill={color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Doanh thu theo Trạng thái</CardTitle>
+                  <p className="text-sm text-muted-foreground">Tổng tiền (VNĐ) phân theo loại</p>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={[
+                      { name: 'Hoàn thành', revenue: completedTrips.reduce((s, t) => s + (t.price ?? 0), 0) },
+                      { name: 'Đang đi', revenue: inProgressTrips.reduce((s, t) => s + (t.price ?? 0), 0) },
+                      { name: 'Chờ xử lý', revenue: pendingTrips.reduce((s, t) => s + (t.price ?? 0), 0) },
+                      { name: 'Đã hủy', revenue: cancelledTrips.reduce((s, t) => s + (t.price ?? 0), 0) },
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 12 }} />
+                      <RechartsTooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend />
+                      <Bar dataKey="revenue" name="Doanh thu" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <Card className="xl:col-span-2">

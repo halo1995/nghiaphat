@@ -18,6 +18,7 @@ import type {
   DriverExpenseType as ApiDriverExpenseType,
   DriverDailySummaryResponse,
   DriverDailyTripSummaryResponse,
+  DriverTransactionResponse,
 } from '@/services/api';
 
 export const secureAttachmentUrl = (url: string): string => {
@@ -155,6 +156,7 @@ export interface DriverDailyTripSummary {
   amount: number;
   status: string;
   alreadyPaid: number;
+  customerPrepaid: number;
 }
 
 export interface DriverDailySummary {
@@ -163,6 +165,19 @@ export interface DriverDailySummary {
   date: string;
   expectedAmount: number;
   trips: DriverDailyTripSummary[];
+}
+
+export interface DriverTransaction {
+  id: string;
+  driverId: string;
+  amount: number;
+  transactionType: 'CREDIT' | 'DEBIT'; // CREDIT: tăng dư nợ, DEBIT: giảm dư nợ
+  balanceAfter: number;
+  referenceType: string;
+  referenceId: string | null;
+  description: string;
+  createdAt: string;
+  createdBy: string | null;
 }
 
 const METHOD_TO_FRONT: Record<ApiPaymentMethod, PaymentMethod> = {
@@ -354,6 +369,7 @@ export const recordTripPayment = async (input: {
 export const createDeposit = async (input: {
   driverId: string;
   amount: number;
+  method: PaymentMethod;
   note?: string;
   attachments?: File[];
   paymentDate?: string;
@@ -361,6 +377,7 @@ export const createDeposit = async (input: {
   const request = {
     driverId: Number(input.driverId),
     amount: input.amount,
+    method: METHOD_TO_BACK[input.method],
     note: input.note,
     paymentDate: input.paymentDate,
   };
@@ -500,6 +517,7 @@ const mapDailyTripSummary = (trip: DriverDailyTripSummaryResponse): DriverDailyT
   amount: trip.amount,
   status: trip.status,
   alreadyPaid: trip.alreadyPaid,
+  customerPrepaid: trip.customerPrepaid || 0,
 });
 
 const mapDailySummary = (summary: DriverDailySummaryResponse): DriverDailySummary => ({
@@ -551,6 +569,7 @@ export const getDriverDailySummary = async (
         amount: outstandingAmount, // Số tiền thực tế cần nộp, không phải tổng giá chuyến
         status: trip.status,
         alreadyPaid: 0, // Would need payment data to calculate this accurately
+        customerPrepaid: trip.customerAdvanceReconciled ?? 0,
       };
     });
 
@@ -564,6 +583,34 @@ export const getDriverDailySummary = async (
       expectedAmount,
       trips,
     };
+  }
+};
+
+export const getDriverTransactions = async (
+  options: { driverId?: number; page?: number; size?: number } = {}
+): Promise<{ data: DriverTransaction[]; total: number; page: number }> => {
+  try {
+    const response = await apiService.getDriverTransactions(options.driverId, options.page, options.size);
+    const data = response.content.map((item) => ({
+      id: item.id.toString(),
+      driverId: item.driverId.toString(),
+      amount: item.amount,
+      transactionType: item.transactionType,
+      balanceAfter: item.balanceAfter,
+      referenceType: item.referenceType,
+      referenceId: item.referenceId ? item.referenceId.toString() : null,
+      description: item.description,
+      createdAt: item.createdAt,
+      createdBy: item.createdBy ? item.createdBy.toString() : null,
+    }));
+    return {
+      data,
+      total: response.pageable.totalElements,
+      page: response.pageable.pageNumber,
+    };
+  } catch (error) {
+    console.error('Error fetching driver transactions:', error);
+    throw error;
   }
 };
 

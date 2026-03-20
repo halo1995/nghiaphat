@@ -87,6 +87,10 @@ public class User {
     @Temporal(TemporalType.TIMESTAMP)
     private Date updatedAt;
     
+    @Version
+    @Builder.Default
+    private Long version = 0L;
+    
     @PrePersist
     public void prePersist() {
         var now = new Date();

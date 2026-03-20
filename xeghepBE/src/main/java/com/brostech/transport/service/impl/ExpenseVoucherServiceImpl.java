@@ -6,10 +6,12 @@ import com.brostech.transport.dto.expense.ExpenseVoucherHistoryDTO;
 import com.brostech.transport.dto.expense.ExpenseVoucherRequest;
 import com.brostech.transport.dto.expense.ExpenseVoucherStatusUpdateRequest;
 import com.brostech.transport.dto.payment.PaymentAttachmentDTO;
+import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
 import com.brostech.transport.jpa.entity.*;
 import com.brostech.transport.jpa.repository.*;
 import com.brostech.transport.service.ExpenseVoucherService;
 import com.brostech.transport.service.PaymentAttachmentService;
+import com.brostech.transport.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +40,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
     private final PaymentAttachmentService attachmentService;
     private final UserRepository userRepository;
     private final DriverExpenseAdvanceRepository driverExpenseAdvanceRepository;
+    private final PaymentService paymentService;
 
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -358,6 +361,16 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         applyPaymentImpact(voucher, actorId, note);
 
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        
+        // Cập nhật trạng thái phiếu tạm ứng tài xế nếu có
+        if (voucher.getDriverExpenseAdvanceId() != null) {
+            DriverExpenseAdvanceStatusUpdateRequest req = new DriverExpenseAdvanceStatusUpdateRequest();
+            req.setStatus(DriverExpenseAdvance.Status.DEDUCTED);
+            req.setActionUserId(actorId);
+            req.setNote("Khấu trừ tự động từ phiếu chi " + voucher.getCode());
+            paymentService.updateDriverExpenseAdvanceStatus(voucher.getDriverExpenseAdvanceId(), req);
+        }
+        
         recordHistory(saved.getId(), ExpenseVoucher.Status.APPROVED, ExpenseVoucher.Status.PAID, actorId,
                 note != null ? note : "Xác nhận đã chuyển tiền");
         return saved;

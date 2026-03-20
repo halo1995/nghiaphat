@@ -5,6 +5,7 @@ import com.brostech.transport.dto.driver.DriverRequest;
 import com.brostech.transport.jpa.entity.User;
 import com.brostech.transport.jpa.repository.UserRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
+import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.service.DriverService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,6 +36,7 @@ public class DriverServiceImpl implements DriverService {
     private final TripRepository tripRepository;
     private final com.brostech.transport.jpa.repository.TripPaymentRepository tripPaymentRepository;
     private final com.brostech.transport.jpa.repository.DepositRecordRepository depositRecordRepository;
+    private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
     
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat dateOnlyFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -244,16 +246,34 @@ public class DriverServiceImpl implements DriverService {
             depositedPerTrip.merge(deposit.getTripId(), deposit.getAmount(), Double::sum);
         }
         
+        // Calculate customer prepayments per trip
+        java.util.Map<Long, Double> prepaidPerTrip = new java.util.HashMap<>();
+        for (Long tripId : tripIds) {
+            Double prepaid = customerAdvancePaymentRepository.sumAmountByTripIdAndStatuses(
+                tripId, 
+                java.util.List.of(
+                    com.brostech.transport.jpa.entity.CustomerAdvancePayment.Status.PENDING, 
+                    com.brostech.transport.jpa.entity.CustomerAdvancePayment.Status.SUBMITTED, 
+                    com.brostech.transport.jpa.entity.CustomerAdvancePayment.Status.RECONCILED
+                )
+            );
+            if (prepaid > 0) {
+                prepaidPerTrip.put(tripId, prepaid);
+            }
+        }
+        
         List<com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary> tripSummaries = trips.stream()
                 .map(trip -> {
                     double amount = trip.getPrice().doubleValue();
                     double alreadyDeposited = depositedPerTrip.getOrDefault(trip.getId(), 0.0);
+                    double customerPrepaid = prepaidPerTrip.getOrDefault(trip.getId(), 0.0);
                     
                     return com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary.builder()
                             .tripId(trip.getId())
                             .pickupLocation(trip.getPickupLocation())
                             .dropoffLocation(trip.getDropoffLocation())
                             .amount(amount)
+                            .customerPrepaid(customerPrepaid)
                             .status(trip.getStatus().name())
                             .alreadyPaid(alreadyDeposited) // Amount already deposited back to company
                             .build();
@@ -261,7 +281,7 @@ public class DriverServiceImpl implements DriverService {
                 .collect(java.util.stream.Collectors.toList());
 
         double expectedAmount = tripSummaries.stream()
-                .mapToDouble(com.brostech.transport.dto.driver.DriverDailySummaryDTO.TripSummary::getAmount)
+                .mapToDouble(t -> Math.max(0.0, t.getAmount() - t.getAlreadyPaid() - t.getCustomerPrepaid()))
                 .sum();
 
         // Get current outstanding balance to show overall debt status

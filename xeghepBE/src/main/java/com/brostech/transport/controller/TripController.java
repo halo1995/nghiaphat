@@ -2,12 +2,15 @@ package com.brostech.transport.controller;
 
 import com.brostech.transport.dto.trip.TripDTO;
 import com.brostech.transport.dto.trip.TripRequest;
+import com.brostech.transport.dto.trip.TripStatusHistoryDTO;
 import com.brostech.transport.service.TripService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -41,5 +44,10 @@ public class TripController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         tripService.delete(id);
+    }
+
+    @GetMapping("/{id}/status-history")
+    public List<TripStatusHistoryDTO> getStatusHistory(@PathVariable Long id) {
+        return tripService.getStatusHistory(id);
     }
 }

@@ -3,6 +3,7 @@ package com.brostech.transport.service.impl;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
 import com.brostech.transport.dto.trip.TripDTO;
 import com.brostech.transport.dto.trip.TripRequest;
+import com.brostech.transport.dto.trip.TripStatusHistoryDTO;
 import com.brostech.transport.jpa.entity.Customer;
 import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.Trip;
@@ -13,7 +14,9 @@ import com.brostech.transport.jpa.repository.CustomerRepository;
 import com.brostech.transport.jpa.repository.TripGroupRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
+import com.brostech.transport.jpa.repository.TripStatusHistoryRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
+import com.brostech.transport.jpa.entity.TripStatusHistory;
 import com.brostech.transport.service.PaymentService;
 import com.brostech.transport.service.TripService;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +58,7 @@ public class TripServiceImpl implements TripService {
     private final PaymentService paymentService;
     private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
     private final TripGroupRepository tripGroupRepository;
+    private final TripStatusHistoryRepository tripStatusHistoryRepository;
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -122,6 +126,7 @@ public class TripServiceImpl implements TripService {
         }
         trip.setStatus(normalizeStatusForFullVehicle(trip, trip.getStatus()));
         trip = tripRepository.save(trip);
+        recordStatusHistory(trip.getId(), null, trip.getStatus(), null);
         trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, null);
         return toDTO(trip);
@@ -276,6 +281,9 @@ public class TripServiceImpl implements TripService {
             trip.setStatus(normalizeStatusForFullVehicle(trip, req.getStatus()));
         }
         trip = tripRepository.save(trip);
+        if (previousStatus != trip.getStatus()) {
+            recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), null);
+        }
         trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, previousStatus);
         return toDTO(trip);
@@ -486,5 +494,45 @@ public class TripServiceImpl implements TripService {
         request.setAmount(netAmount);
         request.setMethod(TripPayment.PaymentMethod.CASH);
         paymentService.createTripPayment(request, Collections.emptyList());
+    }
+
+    private void recordStatusHistory(Long tripId, Trip.TripStatus fromStatus, Trip.TripStatus toStatus, String note) {
+        String actionBy = null;
+        String actionByName = null;
+        try {
+            org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails ud) {
+                actionBy = ud.getUsername();
+                actionByName = ud.getUsername();
+            }
+        } catch (Exception ignored) {}
+        TripStatusHistory history = TripStatusHistory.builder()
+                .tripId(tripId)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .actionAt(new Date())
+                .actionBy(actionBy)
+                .actionByName(actionByName)
+                .note(note)
+                .build();
+        tripStatusHistoryRepository.save(history);
+    }
+
+    @Override
+    public List<TripStatusHistoryDTO> getStatusHistory(Long tripId) {
+        return tripStatusHistoryRepository.findByTripIdOrderByActionAtDesc(tripId)
+                .stream()
+                .map(h -> TripStatusHistoryDTO.builder()
+                        .id(h.getId())
+                        .tripId(h.getTripId())
+                        .fromStatus(h.getFromStatus())
+                        .toStatus(h.getToStatus())
+                        .actionAt(formatDate(h.getActionAt()))
+                        .actionBy(h.getActionBy())
+                        .actionByName(h.getActionByName())
+                        .note(h.getNote())
+                        .build())
+                .toList();
     }
 }

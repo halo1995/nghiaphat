@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,35 +6,48 @@ import { Routes, Route, BrowserRouter, Navigate, Outlet, useLocation } from "rea
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./components/AppSidebar";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { ThemeProvider } from "./components/ThemeProvider";
 
-// Auth
+// Static imports — small/essential pages
 import Login from "@/pages/Login";
 import ChangePassword from "@/pages/ChangePassword";
-
-// Pages
-import Index from "@/pages/Index";
-import CallCenter from "@/pages/CallCenter";
-import CreateBooking from "@/pages/CreateBooking";
-import Dispatch from "@/pages/Dispatch";
-import GroupTrips from "@/pages/GroupTrips";
-import AssignVehicle from "@/pages/AssignVehicle";
-import DriverDashboard from "@/pages/DriverDashboard";
-import DriverAdvances from "@/pages/DriverAdvances";
-import DriverTrips from "@/pages/DriverTrips";
-import TripExecution from "@/pages/TripExecution";
-import VehicleList from "@/pages/VehicleList";
-import VehicleDetail from "@/pages/VehicleDetail";
-import AddVehicle from "@/pages/AddVehicle";
-import EditVehicle from "@/pages/EditVehicle";
-import Drivers from "@/pages/Drivers";
-import Customers from "@/pages/Customers";
 import NotFound from "@/pages/NotFound";
-import AddDriver from "@/pages/AddDriver";
-import AddCustomer from "@/pages/AddCustomer";
-import Accounting from "@/pages/Accounting";
-import ExpenseVouchers from "@/pages/ExpenseVouchers";
-import Users from "@/pages/Users";
-import ApiTest from "@/components/ApiTest";
+
+// Lazy-loaded pages — heavy components loaded on demand
+const Index = React.lazy(() => import("@/pages/Index"));
+const CallCenter = React.lazy(() => import("@/pages/CallCenter"));
+const CreateBooking = React.lazy(() => import("@/pages/CreateBooking"));
+const Dispatch = React.lazy(() => import("@/pages/Dispatch"));
+const GroupTrips = React.lazy(() => import("@/pages/GroupTrips"));
+const AssignVehicle = React.lazy(() => import("@/pages/AssignVehicle"));
+const DriverDashboard = React.lazy(() => import("@/pages/DriverDashboard"));
+const DriverAdvances = React.lazy(() => import("@/pages/DriverAdvances"));
+const DriverTrips = React.lazy(() => import("@/pages/DriverTrips"));
+const TripExecution = React.lazy(() => import("@/pages/TripExecution"));
+const VehicleList = React.lazy(() => import("@/pages/VehicleList"));
+const VehicleDetail = React.lazy(() => import("@/pages/VehicleDetail"));
+const AddVehicle = React.lazy(() => import("@/pages/AddVehicle"));
+const EditVehicle = React.lazy(() => import("@/pages/EditVehicle"));
+const Drivers = React.lazy(() => import("@/pages/Drivers"));
+const Customers = React.lazy(() => import("@/pages/Customers"));
+const AddDriver = React.lazy(() => import("@/pages/AddDriver"));
+const EditDriver = React.lazy(() => import("@/pages/EditDriver"));
+const AddCustomer = React.lazy(() => import("@/pages/AddCustomer"));
+const Accounting = React.lazy(() => import("@/pages/Accounting"));
+const ExpenseVouchers = React.lazy(() => import("@/pages/ExpenseVouchers"));
+const DriverLedger = React.lazy(() => import("@/pages/DriverLedger"));
+const Users = React.lazy(() => import("@/pages/Users"));
+const ApiTest = React.lazy(() => import("@/components/ApiTest"));
+
+// Loading spinner for lazy-loaded pages
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-full min-h-[200px]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-green-500 border-t-transparent" />
+      <p className="text-sm text-muted-foreground">Đang tải...</p>
+    </div>
+  </div>
+);
 
 
 
@@ -53,7 +66,9 @@ const LayoutWithSidebar = () => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <SidebarInset className="flex-1 w-full min-w-0">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </SidebarInset>
       </div>
     </SidebarProvider>
@@ -107,6 +122,7 @@ const RoleRoute = ({ children, allowed }: { children: React.ReactNode; allowed: 
 
 function App() {
   return (
+    <ThemeProvider defaultTheme="light" storageKey="xeghep-theme">
     <AuthProvider>
       <TooltipProvider>
         <BrowserRouter>
@@ -150,6 +166,7 @@ function App() {
               <Route path="/edit-vehicle/:id" element={<RoleRoute allowed={["admin"]}><EditVehicle /></RoleRoute>} />
               <Route path="/drivers" element={<RoleRoute allowed={["admin"]}><Drivers /></RoleRoute>} />
               <Route path="/drivers/add" element={<RoleRoute allowed={["admin"]}><AddDriver /></RoleRoute>} />
+              <Route path="/drivers/:id/edit" element={<RoleRoute allowed={["admin"]}><EditDriver /></RoleRoute>} />
               <Route path="/customers" element={<RoleRoute allowed={["admin"]}><Customers /></RoleRoute>} />
               <Route path="/customers/add" element={<RoleRoute allowed={["admin"]}><AddCustomer /></RoleRoute>} />
               {/* Quản trị người dùng */}
@@ -157,6 +174,7 @@ function App() {
               {/* Kế toán */}
               <Route path="/accounting" element={<RoleRoute allowed={["admin", "accountant"]}><Accounting /></RoleRoute>} />
               <Route path="/accounting/expenses" element={<RoleRoute allowed={["admin", "accountant"]}><ExpenseVouchers /></RoleRoute>} />
+              <Route path="/accounting/driver-ledger" element={<RoleRoute allowed={["admin", "accountant"]}><DriverLedger /></RoleRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Route>
@@ -164,6 +182,7 @@ function App() {
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -9,11 +9,13 @@ import com.brostech.transport.dto.payment.DepositRecordRequest;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceDTO;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceRequest;
 import com.brostech.transport.dto.payment.DriverExpenseAdvanceStatusUpdateRequest;
+import com.brostech.transport.dto.payment.DriverTransactionDTO;
 import com.brostech.transport.dto.payment.TripPaymentDTO;
 import com.brostech.transport.dto.payment.TripPaymentRequest;
 import com.brostech.transport.jpa.entity.PaymentAttachment;
 import com.brostech.transport.service.PaymentAttachmentService;
 import com.brostech.transport.service.PaymentService;
+import com.brostech.transport.service.ExcelExportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -22,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,10 +44,12 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("transport-service/payments")
+@PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
 public class PaymentController {
 
     private final PaymentService paymentService;
     private final PaymentAttachmentService attachmentService;
+    private final ExcelExportService excelExportService;
 
     // Trip Payments
 
@@ -200,6 +205,13 @@ public class PaymentController {
         return paymentService.searchDriverExpenseAdvances(driverId, status, from, to, pageable);
     }
 
+    // Driver transactions
+    @GetMapping("/driver-transactions")
+    public Page<DriverTransactionDTO> getDriverTransactions(@RequestParam(value = "driverId", required = false) Long driverId,
+                                                            Pageable pageable) {
+        return paymentService.getDriverTransactions(driverId, pageable);
+    }
+
     /**
      * Tổng hợp doanh thu và công nợ theo tài xế.
      * @param from ngày bắt đầu (yyyy-MM-dd hoặc yyyy-MM-dd HH:mm:ss)
@@ -210,6 +222,20 @@ public class PaymentController {
     public AccountingSummaryDTO getAccountingSummary(@RequestParam(value = "from", required = false) String from,
                                                      @RequestParam(value = "to", required = false) String to) {
         return paymentService.getAccountingSummary(from, to);
+    }
+
+    @GetMapping(value = "/summary/export", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public org.springframework.http.ResponseEntity<byte[]> exportAccountingSummary(@RequestParam(value = "from", required = false) String from,
+                                                          @RequestParam(value = "to", required = false) String to) {
+        try {
+            AccountingSummaryDTO summary = paymentService.getAccountingSummary(from, to);
+            byte[] bytes = excelExportService.exportAccountingSummary(summary);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=accounting_summary.xlsx");
+            return new org.springframework.http.ResponseEntity<>(bytes, headers, org.springframework.http.HttpStatus.OK);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Lỗi xuất file Excel", e);
+        }
     }
 
     @GetMapping("/attachments/{id}")

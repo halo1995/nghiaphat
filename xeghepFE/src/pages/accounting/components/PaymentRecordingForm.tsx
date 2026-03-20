@@ -24,6 +24,7 @@ interface PaymentRecordingFormProps {
     onSubmit: (data: {
         driverId: string;
         amount: number;
+        method: 'cash' | 'transfer';
         note: string;
         attachments: File[];
         paymentDate?: string;
@@ -41,6 +42,7 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
         date: new Date().toISOString().split('T')[0],
         driverId: '',
         amount: '',
+        method: 'transfer' as 'cash' | 'transfer',
         note: '',
     });
     const [paymentImages, setPaymentImages] = useState<File[]>([]);
@@ -97,6 +99,7 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
         onSubmit({
             driverId: paymentForm.driverId,
             amount,
+            method: paymentForm.method,
             note: paymentForm.note,
             attachments: paymentImages,
             paymentDate: paymentForm.date,
@@ -106,6 +109,7 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
             date: new Date().toISOString().split('T')[0],
             driverId: '',
             amount: '',
+            method: 'transfer',
             note: '',
         });
         setPaymentImages([]);
@@ -170,13 +174,31 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                             placeholder="Nhập số tiền"
                         />
                     </div>
+                    <div className="space-y-1">
+                        <label className="text-sm text-muted-foreground">Hình thức *</label>
+                        <Select
+                            value={paymentForm.method}
+                            onValueChange={(value: 'cash' | 'transfer') =>
+                                setPaymentForm((prev) => ({ ...prev, method: value }))
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="transfer">Chuyển khoản</SelectItem>
+                                <SelectItem value="cash">Tiền mặt</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 {/* Summary & Trip Details */}
                 {dailySummary && dailySummary.trips.length > 0 && (() => {
-                    const totalDebt = dailySummary.expectedAmount;
+                    const totalDebt = dailySummary.expectedAmount + dailySummary.trips.reduce((sum, trip) => sum + trip.customerPrepaid, 0);
+                    const totalCustomerPrepaid = dailySummary.trips.reduce((sum, trip) => sum + trip.customerPrepaid, 0);
                     const totalDeposited = dailySummary.trips.reduce((sum, trip) => sum + trip.alreadyPaid, 0);
-                    const remainingDebt = totalDebt - totalDeposited;
+                    const remainingDebt = totalDebt - totalDeposited - totalCustomerPrepaid;
                     const depositAmount = Number(paymentForm.amount || 0);
                     const afterDeposit = remainingDebt - depositAmount;
 
@@ -188,6 +210,12 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                                     <span className="text-muted-foreground">Tổng giá trị chuyến:</span>
                                     <span className="font-semibold">{totalDebt.toLocaleString('vi-VN')}đ</span>
                                 </div>
+                                {totalCustomerPrepaid > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">Khách đã CK trước:</span>
+                                        <span className="font-semibold text-green-600">-{totalCustomerPrepaid.toLocaleString('vi-VN')}đ</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Đã nộp trước đó:</span>
                                     <span className="font-semibold text-green-600">-{totalDeposited.toLocaleString('vi-VN')}đ</span>
@@ -239,14 +267,19 @@ export const PaymentRecordingForm: React.FC<PaymentRecordingFormProps> = ({
                                                     <div className="text-muted-foreground mt-1">
                                                         {trip.pickupLocation} → {trip.dropoffLocation}
                                                     </div>
-                                                    <div className="flex justify-between mt-1">
+                                                    <div className="flex flex-col gap-1 mt-1 text-right text-xs">
+                                                        {trip.customerPrepaid > 0 && (
+                                                            <span className="text-green-600">
+                                                                Khách CK trước: {trip.customerPrepaid.toLocaleString('vi-VN')}đ
+                                                            </span>
+                                                        )}
                                                         {trip.alreadyPaid > 0 && (
                                                             <span className="text-green-600">
                                                                 Đã nộp: {trip.alreadyPaid.toLocaleString('vi-VN')}đ
                                                             </span>
                                                         )}
-                                                        <span className={tripRemaining > 0 ? 'text-orange-600' : 'text-green-600'}>
-                                                            {tripRemaining > 0 ? `Còn: ${tripRemaining.toLocaleString('vi-VN')}đ` : '✓ Đã đủ'}
+                                                        <span className={tripRemaining > 0 ? 'text-orange-600 font-medium' : 'text-green-600 font-medium'}>
+                                                            {tripRemaining > 0 ? `Tài xế cần nộp: ${tripRemaining.toLocaleString('vi-VN')}đ` : '✓ Đã đủ'}
                                                         </span>
                                                     </div>
                                                 </div>

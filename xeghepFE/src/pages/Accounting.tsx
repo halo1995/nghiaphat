@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePickerField } from '@/components/ui/date-picker-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Download } from 'lucide-react';
+import { apiService } from '@/services/apiService';
 import {
   CustomerAdvancePayment,
   CustomerAdvanceStatus,
@@ -71,6 +73,8 @@ const Accounting: React.FC = () => {
   const [previewAdvance, setPreviewAdvance] = useState<CustomerAdvancePayment | null>(null);
   const [previewAction, setPreviewAction] = useState<CustomerAdvanceStatus | null>(null);
   
+  const [isExporting, setIsExporting] = useState(false);
+
   // State for active tab
   const [activeTab, setActiveTab] = useState<'driver-summary' | 'customer-advances'>('driver-summary');
 
@@ -192,15 +196,43 @@ const Accounting: React.FC = () => {
   const handleDeposit = (data: {
     driverId: string;
     amount: number;
+    method: 'cash' | 'transfer';
     note: string;
     attachments: File[];
   }) => {
     depositMut.mutate(data);
   };
 
+  const handleExportSummary = async () => {
+    setIsExporting(true);
+    try {
+      const from = summaryDateRange.from;
+      const to = summaryDateRange.to;
+      const blob = await apiService.exportAccountingReport(from, to);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bao-cao-cong-no-${from}-den-${to}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: 'Xuất báo cáo thành công' });
+    } catch (error) {
+      toast({
+        title: 'Lỗi xuất báo cáo',
+        description: error instanceof Error ? error.message : 'Vui lòng thử lại',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handlePaymentDeposit = (data: {
     driverId: string;
     amount: number;
+    method: 'cash' | 'transfer';
     note: string;
     attachments: File[];
   }) => {
@@ -351,6 +383,15 @@ const Accounting: React.FC = () => {
               }}
             >
               Tháng hiện tại
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleExportSummary}
+              disabled={isExporting}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {isExporting ? 'Đang xuất...' : 'Xuất báo cáo Excel'}
             </Button>
           </div>
         </CardContent>

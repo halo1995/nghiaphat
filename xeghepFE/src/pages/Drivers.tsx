@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDrivers } from '@/hooks/useApi';
 import { mapDriverResponseToDriver, updateDriver } from '@/data/drivers';
@@ -232,6 +232,15 @@ const Drivers = () => {
                               </option>
                             ))}
                           </select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => navigate(`/drivers/${driver.id}/edit`)}
+                          >
+                            <Pencil size={14} />
+                            Sửa
+                          </Button>
                         </div>
                       </div>
                     </CardContent>

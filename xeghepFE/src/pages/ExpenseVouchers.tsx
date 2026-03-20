@@ -632,11 +632,16 @@ const ExpenseVouchersPage: React.FC = () => {
 
     setIsExporting(true);
     try {
-      const blob = await apiService.exportAccountingReport(exportFromDate, exportToDate);
+      const blob = await apiService.exportExpenseVouchers({
+        from: exportFromDate,
+        to: exportToDate,
+        status: filters.status,
+        category: filters.category,
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `bao-cao-thu-chi-${exportFromDate}-${exportToDate}.xlsx`;
+      link.download = `phieu-chi-${exportFromDate}-${exportToDate}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

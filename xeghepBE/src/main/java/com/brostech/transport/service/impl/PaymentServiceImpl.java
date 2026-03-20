@@ -18,6 +18,8 @@ import com.brostech.transport.jpa.entity.CompanyWallet;
 import com.brostech.transport.jpa.entity.CustomerAdvancePayment;
 import com.brostech.transport.jpa.entity.DepositRecord;
 import com.brostech.transport.jpa.entity.DriverExpenseAdvance;
+import com.brostech.transport.jpa.entity.DriverTransaction;
+import com.brostech.transport.dto.payment.DriverTransactionDTO;
 import com.brostech.transport.jpa.entity.PaymentAttachment;
 import com.brostech.transport.jpa.entity.Trip;
 import com.brostech.transport.jpa.entity.TripPayment;
@@ -27,6 +29,7 @@ import com.brostech.transport.jpa.repository.CompanyWalletRepository;
 import com.brostech.transport.jpa.repository.CustomerAdvancePaymentRepository;
 import com.brostech.transport.jpa.repository.DepositRecordRepository;
 import com.brostech.transport.jpa.repository.DriverExpenseAdvanceRepository;
+import com.brostech.transport.jpa.repository.DriverTransactionRepository;
 import com.brostech.transport.jpa.repository.TripPaymentRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.UserRepository;
@@ -75,6 +78,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentAttachmentService attachmentService;
     private final CompanyWalletRepository companyWalletRepository;
     private final CompanyTransactionRepository companyTransactionRepository;
+    private final DriverTransactionRepository driverTransactionRepository;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -101,7 +105,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
             
             payment = tripPaymentRepository.save(payment);
-            adjustDriverOutstanding(driver, req.getAmount());
+            adjustDriverOutstanding(driver, req.getAmount(), DriverTransaction.ReferenceType.TRIP_CASH_COLLECTED, payment.getId(), "Thu tiền mặt chuyến", null);
             double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
             driver.setTotalEarnings(currentEarnings + req.getAmount());
             userRepository.save(driver);
@@ -213,7 +217,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // Update driver's outstanding balance and earnings
-        adjustDriverOutstanding(driver, req.getAmount());
+        adjustDriverOutstanding(driver, req.getAmount(), DriverTransaction.ReferenceType.TRIP_CASH_COLLECTED, firstPayment.getId(), "Thu tiền mặt ngày " + req.getPaymentDate(), null);
         double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
         driver.setTotalEarnings(currentEarnings + req.getAmount());
         userRepository.save(driver);
@@ -244,9 +248,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripPayment not found"));
         tripPaymentRepository.deleteById(id);
         attachmentService.deleteAttachments(PaymentAttachment.ReferenceType.TRIP_PAYMENT, id);
-        userRepository.findByIdAndRole(payment.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
+            userRepository.findByIdAndRole(payment.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
-                    adjustDriverOutstanding(driver, -payment.getAmount());
+                    adjustDriverOutstanding(driver, -payment.getAmount(), DriverTransaction.ReferenceType.MANUAL_ADJUSTMENT, payment.getId(), "Xóa thu tiền chuyến", null);
                     double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
                     double updatedEarnings = currentEarnings - payment.getAmount();
                     driver.setTotalEarnings(Math.max(updatedEarnings, 0));
@@ -267,12 +271,13 @@ public class PaymentServiceImpl implements PaymentService {
             DepositRecord deposit = DepositRecord.builder()
                     .driverId(req.getDriverId())
                     .amount(req.getAmount())
+                    .paymentMethod(req.getPaymentMethod())
                     .note(req.getNote())
                     .createdAt(new Date())
                     .build();
             
             deposit = depositRecordRepository.save(deposit);
-            adjustDriverOutstanding(driver, -req.getAmount());
+            adjustDriverOutstanding(driver, -req.getAmount(), DriverTransaction.ReferenceType.DEPOSIT_TO_COMPANY, deposit.getId(), "Nộp tiền về công ty", null);
             userRepository.save(driver);
             creditCompanyWallet(req.getAmount(),
                     "Nộp tiền tài xế",
@@ -346,6 +351,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .driverId(req.getDriverId())
                     .tripId(trip.getId())
                     .amount(amountForThisTrip)
+                    .paymentMethod(req.getPaymentMethod())
                     .note(req.getNote())
                     .createdAt(new Date())
                     .build();
@@ -378,7 +384,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // Update driver's outstanding balance
-        adjustDriverOutstanding(driver, -req.getAmount());
+        adjustDriverOutstanding(driver, -req.getAmount(), DriverTransaction.ReferenceType.DEPOSIT_TO_COMPANY, firstDeposit.getId(), "Nộp tiền ngày " + req.getPaymentDate(), null);
         userRepository.save(driver);
         
         // Credit company wallet
@@ -414,9 +420,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "DepositRecord not found"));
         depositRecordRepository.deleteById(id);
         attachmentService.deleteAttachments(PaymentAttachment.ReferenceType.DEPOSIT_RECORD, id);
-        userRepository.findByIdAndRole(deposit.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
+            userRepository.findByIdAndRole(deposit.getDriverId(), com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                 .ifPresent(driver -> {
-                    adjustDriverOutstanding(driver, deposit.getAmount());
+                    adjustDriverOutstanding(driver, deposit.getAmount(), DriverTransaction.ReferenceType.MANUAL_ADJUSTMENT, deposit.getId(), "Xóa phiếu nộp tiền", null);
                     userRepository.save(driver);
                 });
     }
@@ -597,10 +603,12 @@ public class PaymentServiceImpl implements PaymentService {
                         PaymentAttachment.ReferenceType.DRIVER_EXPENSE_ADVANCE,
                         advance.getId(),
                         actionUser.getId());
+                adjustDriverOutstanding(driver, advance.getAmount(), DriverTransaction.ReferenceType.DRIVER_EXPENSE_ADVANCE, advance.getId(), "Tài xế nhận tạm ứng chi phí", actionUser.getId());
             }
             case DEDUCTED -> {
                 advance.setDeductedAt(now);
                 advance.setDeductedBy(actionUser.getId());
+                adjustDriverOutstanding(driver, -advance.getAmount(), DriverTransaction.ReferenceType.DRIVER_EXPENSE_ADVANCE, advance.getId(), "Khấu trừ tạm ứng chi phí", actionUser.getId());
             }
             case REJECTED -> {
                 advance.setRejectionReason(req.getRejectionReason());
@@ -670,7 +678,35 @@ public class PaymentServiceImpl implements PaymentService {
         return driverExpenseAdvanceRepository.findAll(pageable).map(this::toDriverExpenseAdvanceDTO);
     }
 
+    // Driver transactions
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<DriverTransactionDTO> getDriverTransactions(Long driverId, Pageable pageable) {
+        if (driverId != null) {
+            return driverTransactionRepository.findByDriverIdOrderByCreatedAtDesc(driverId, pageable)
+                    .map(this::toDriverTransactionDTO);
+        }
+        return driverTransactionRepository.findAllByOrderByCreatedAtDesc(pageable)
+                .map(this::toDriverTransactionDTO);
+    }
+
     // Mapping methods
+
+    private DriverTransactionDTO toDriverTransactionDTO(DriverTransaction t) {
+        return DriverTransactionDTO.builder()
+                .id(t.getId())
+                .driverId(t.getDriverId())
+                .amount(t.getAmount())
+                .transactionType(t.getTransactionType() != null ? t.getTransactionType().name() : null)
+                .balanceAfter(t.getBalanceAfter())
+                .referenceType(t.getReferenceType() != null ? t.getReferenceType().name() : null)
+                .referenceId(t.getReferenceId())
+                .description(t.getDescription())
+                .createdAt(t.getCreatedAt())
+                .createdBy(t.getCreatedBy())
+                .build();
+    }
 
     private TripPaymentDTO toTripPaymentDTO(TripPayment payment) {
         return TripPaymentDTO.builder()
@@ -761,7 +797,7 @@ public class PaymentServiceImpl implements PaymentService {
 
             userRepository.findByIdAndRole(driverId, com.brostech.transport.jpa.entity.User.UserRole.DRIVER)
                     .ifPresent(driver -> {
-                        adjustDriverOutstanding(driver, -amount);
+                        adjustDriverOutstanding(driver, -amount, DriverTransaction.ReferenceType.CUSTOMER_ADVANCED, advance.getId(), "Đối soát tiền khách ứng trước chuyến", actorId);
                         userRepository.save(driver);
                     });
         });
@@ -1001,13 +1037,29 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid driverId"));
     }
 
-    private void adjustDriverOutstanding(User driver, double delta) {
+    private void adjustDriverOutstanding(User driver, double delta, DriverTransaction.ReferenceType refType, Long refId, String desc, Long actorId) {
+        if (delta == 0) return;
         double currentOutstanding = Objects.requireNonNullElse(driver.getOutstandingBalance(), 0.0);
         double updated = currentOutstanding + delta;
         if (updated < 0) {
             updated = 0;
         }
         driver.setOutstandingBalance(updated);
+        
+        DriverTransaction.TransactionType txType = delta > 0 ? DriverTransaction.TransactionType.DEBIT : DriverTransaction.TransactionType.CREDIT;
+        
+        DriverTransaction tx = DriverTransaction.builder()
+                .driverId(driver.getId())
+                .amount(Math.abs(delta))
+                .transactionType(txType)
+                .referenceType(refType)
+                .referenceId(refId)
+                .description(desc)
+                .createdBy(actorId)
+                .balanceAfter(updated)
+                .createdAt(new Date())
+                .build();
+        driverTransactionRepository.save(tx);
     }
 
     private void creditCompanyWallet(double amount,

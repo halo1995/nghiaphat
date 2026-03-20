@@ -248,6 +248,7 @@ export interface DepositRecordResponse {
   id: number;
   driverId: number;
   amount: number;
+  method?: PaymentMethod;
   createdAt: string;
   note?: string | null;
   attachments: PaymentAttachmentResponse[];
@@ -256,6 +257,7 @@ export interface DepositRecordResponse {
 export interface DepositRecordRequest {
   driverId: number;
   amount: number;
+  method: PaymentMethod;
   note?: string | null;
 }
 
@@ -502,6 +504,7 @@ export interface DriverDailyTripSummaryResponse {
   amount: number;
   status: string;
   alreadyPaid: number;
+  customerPrepaid: number;
 }
 
 export interface DriverDailySummaryResponse {
@@ -510,4 +513,17 @@ export interface DriverDailySummaryResponse {
   date: string;
   expectedAmount: number;
   trips: DriverDailyTripSummaryResponse[];
+}
+
+export interface DriverTransactionResponse {
+  id: number;
+  driverId: number;
+  amount: number;
+  transactionType: 'CREDIT' | 'DEBIT';
+  balanceAfter: number;
+  referenceType: string;
+  referenceId: number | null;
+  description: string;
+  createdAt: string;
+  createdBy: number | null;
 }

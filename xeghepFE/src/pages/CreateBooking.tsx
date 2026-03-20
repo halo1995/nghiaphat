@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createTrip } from '@/data/trips';
+import { getCustomers, Customer } from '@/data/customers';
 import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone, Check, ChevronsUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -67,6 +68,22 @@ const CreateBooking = () => {
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
   const [pickupWardOpen, setPickupWardOpen] = useState(false);
   const [dropoffWardOpen, setDropoffWardOpen] = useState(false);
+  const [customerPhoneOpen, setCustomerPhoneOpen] = useState(false);
+  const [customerPhoneSearch, setCustomerPhoneSearch] = useState('');
+
+  const { data: allCustomers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: getCustomers,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const filteredCustomers = useMemo(() => {
+    if (!customerPhoneSearch || customerPhoneSearch.length < 2) return [];
+    const q = customerPhoneSearch.toLowerCase();
+    return allCustomers
+      .filter((c: Customer) => c.phone.includes(q) || c.name.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [allCustomers, customerPhoneSearch]);
 
   const provinceOptions = useMemo(() => getProvinces(), []);
   const pickupProvinceCode = pickupSelection.province?.code;
@@ -376,13 +393,61 @@ const CreateBooking = () => {
 
                     <div className="space-y-2">
                       <Label htmlFor="customerPhone">Số điện thoại *</Label>
-                      <Input
-                        id="customerPhone"
-                        value={formData.customerPhone}
-                        onChange={(e) => handleChange('customerPhone', e.target.value)}
-                        placeholder="0901234567"
-                        required
-                      />
+                      <Popover open={customerPhoneOpen} onOpenChange={setCustomerPhoneOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between font-normal"
+                          >
+                            {formData.customerPhone || 'Nhập SĐT hoặc chọn khách cũ'}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command shouldFilter={false}>
+                            <CommandInput
+                              placeholder="Nhập SĐT hoặc tên khách hàng..."
+                              value={customerPhoneSearch}
+                              onValueChange={(v) => {
+                                setCustomerPhoneSearch(v);
+                                handleChange('customerPhone', v);
+                              }}
+                            />
+                            <CommandList>
+                              {filteredCustomers.length === 0 && customerPhoneSearch.length >= 2 && (
+                                <CommandEmpty>Không tìm thấy KH. Sẽ tạo mới.</CommandEmpty>
+                              )}
+                              {filteredCustomers.length > 0 && (
+                                <CommandGroup heading="Khách hàng cũ">
+                                  {filteredCustomers.map((c: Customer) => (
+                                    <CommandItem
+                                      key={c.id}
+                                      value={c.phone}
+                                      onSelect={() => {
+                                        handleChange('customerPhone', c.phone);
+                                        handleChange('customerName', c.name);
+                                        setCustomerPhoneSearch(c.phone);
+                                        setCustomerPhoneOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={`mr-2 h-4 w-4 ${
+                                          formData.customerPhone === c.phone ? 'opacity-100' : 'opacity-0'
+                                        }`}
+                                      />
+                                      <div>
+                                        <p className="font-medium">{c.name}</p>
+                                        <p className="text-xs text-muted-foreground">{c.phone}</p>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {!formData.fullVehicle && (

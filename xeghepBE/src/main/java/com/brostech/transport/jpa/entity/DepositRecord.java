@@ -26,6 +26,10 @@ public class DepositRecord {
     @Column(nullable = false)
     private Double amount;
     
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 20)
+    private PaymentMethod paymentMethod;
+    
     @Column(name = "created_at")
     @Temporal(TemporalType.TIMESTAMP)
     private Date createdAt;
@@ -38,5 +42,12 @@ public class DepositRecord {
         if (createdAt == null) {
             createdAt = new Date();
         }
+        if (paymentMethod == null) {
+            paymentMethod = PaymentMethod.CASH;
+        }
+    }
+    
+    public enum PaymentMethod {
+        CASH, TRANSFER
     }
 }

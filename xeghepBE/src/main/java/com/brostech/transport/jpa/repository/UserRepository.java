@@ -16,4 +16,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findByRoleAndNameContainingIgnoreCase(User.UserRole role, String name, Pageable pageable);
     Optional<User> findByIdAndRole(Long id, User.UserRole role);
     List<User> findAllByRole(User.UserRole role);
+    List<User> findAllByRoleAndOutstandingBalanceGreaterThan(User.UserRole role, Double balance);
 }

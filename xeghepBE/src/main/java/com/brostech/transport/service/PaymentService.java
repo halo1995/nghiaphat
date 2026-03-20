@@ -42,4 +42,7 @@ public interface PaymentService {
     DriverExpenseAdvanceDTO createDriverExpenseAdvance(DriverExpenseAdvanceRequest req, List<MultipartFile> attachments);
     DriverExpenseAdvanceDTO updateDriverExpenseAdvanceStatus(Long id, DriverExpenseAdvanceStatusUpdateRequest req);
     Page<DriverExpenseAdvanceDTO> searchDriverExpenseAdvances(Long driverId, String status, String from, String to, Pageable pageable);
+
+    // Driver transactions
+    Page<com.brostech.transport.dto.payment.DriverTransactionDTO> getDriverTransactions(Long driverId, Pageable pageable);
 }

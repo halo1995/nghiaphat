@@ -234,8 +234,8 @@ const AssignVehicle = () => {
     );
   }
 
-  const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
-  const isFullVehicleGroup = groupTrips.some((trip) => trip.fullVehicle);
+  const groupTrips = (trips as any[]).filter((t: any) => group.tripIds.includes(t.id));
+  const isFullVehicleGroup = groupTrips.some((trip: any) => trip.fullVehicle);
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const selectedDriver = drivers.find((d) => d.id === selectedDriverId);
 
