@@ -26,7 +26,7 @@ spring:
     hibernate:
       ddl-auto: update
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: true
 
