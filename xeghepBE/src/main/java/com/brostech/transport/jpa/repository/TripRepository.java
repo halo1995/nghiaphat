@@ -24,4 +24,6 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     List<Trip> findByDriverIdAndStatusAndPickupTimeBetween(Long driverId, Trip.TripStatus status, Date start, Date end);
     
     List<Trip> findByDriverIdAndStatusAndCompletedAtBetween(Long driverId, Trip.TripStatus status, Date start, Date end);
+
+    Trip findFirstByCustomerPhoneOrderByCreatedAtDesc(String customerPhone);
 }

@@ -245,6 +245,11 @@ export const getTripById = async (id: string): Promise<Trip | undefined> => {
   return mapTripResponse(trip);
 };
 
+export const getRecentTrip = async (phone: string): Promise<Trip | null> => {
+  const res = await apiService.getRecentTrip(phone);
+  return res ? mapTripResponse(res) : null;
+};
+
 export const createTrip = async (
   trip: TripForRequest
 ): Promise<Trip> => {

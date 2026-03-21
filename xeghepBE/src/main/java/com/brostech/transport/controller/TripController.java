@@ -46,6 +46,11 @@ public class TripController {
         tripService.delete(id);
     }
 
+    @GetMapping("/recent")
+    public TripDTO getRecentTrip(@RequestParam("phone") String customerPhone) {
+        return tripService.getRecentTripByCustomerPhone(customerPhone);
+    }
+
     @GetMapping("/{id}/status-history")
     public List<TripStatusHistoryDTO> getStatusHistory(@PathVariable Long id) {
         return tripService.getStatusHistory(id);

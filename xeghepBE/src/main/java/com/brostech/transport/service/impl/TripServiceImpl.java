@@ -520,6 +520,16 @@ public class TripServiceImpl implements TripService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public TripDTO getRecentTripByCustomerPhone(String customerPhone) {
+        Trip trip = tripRepository.findFirstByCustomerPhoneOrderByCreatedAtDesc(customerPhone);
+        if (trip == null) {
+            return null;
+        }
+        return toDTO(trip);
+    }
+
+    @Override
     public List<TripStatusHistoryDTO> getStatusHistory(Long tripId) {
         return tripStatusHistoryRepository.findByTripIdOrderByActionAtDesc(tripId)
                 .stream()

@@ -314,6 +314,18 @@ class ApiService {
     }
   }
 
+  async getRecentTrip(phone: string): Promise<TripResponse | null> {
+    const response = await fetch(`${this.buildUrl('/trips/recent')}?phone=${encodeURIComponent(phone)}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error(`Failed to get recent trip: ${response.status}`);
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  }
+
   // Payment APIs
   async getTripPayments(driverId?: number, page: number = 0, size: number = 100): Promise<ApiResponse<TripPaymentResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });

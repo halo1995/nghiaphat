@@ -523,10 +523,13 @@ const CallCenter = () => {
 
   const statusColors: Record<string, string> = {
     'Chờ xác nhận': 'bg-orange-100 text-orange-700 border-orange-200',
-    'Đã xác nhận': 'bg-green-100 text-green-700 border-green-200',
-    'Đã ghép chuyến': 'bg-blue-100 text-blue-700 border-blue-200',
+    'Đã xác nhận': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    'Đã ghép chuyến': 'bg-cyan-100 text-cyan-700 border-cyan-200',
     'Đã phân xe': 'bg-purple-100 text-purple-700 border-purple-200',
-    'Đã hủy': 'bg-gray-100 text-gray-700 border-gray-200',
+    'Đang đón': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    'Đang đi': 'bg-blue-100 text-blue-700 border-blue-200',
+    'Hoàn thành': 'bg-gray-100 text-gray-700 border-gray-200',
+    'Đã hủy': 'bg-red-100 text-red-700 border-red-200',
   };
 
   const pickupDate = parseLocalDateTime(scheduleForm.pickupTime);
@@ -859,6 +862,11 @@ const CallCenter = () => {
                       <SelectItem value="all">Tất cả trạng thái</SelectItem>
                       <SelectItem value="Chờ xác nhận">Chờ xác nhận</SelectItem>
                       <SelectItem value="Đã xác nhận">Đã xác nhận</SelectItem>
+                      <SelectItem value="Đã ghép chuyến">Đã ghép chuyến</SelectItem>
+                      <SelectItem value="Đã phân xe">Đã phân xe</SelectItem>
+                      <SelectItem value="Đang đón">Đang đón</SelectItem>
+                      <SelectItem value="Đang đi">Đang đi</SelectItem>
+                      <SelectItem value="Hoàn thành">Hoàn thành</SelectItem>
                       <SelectItem value="Đã hủy">Đã hủy</SelectItem>
                     </SelectContent>
                   </Select>

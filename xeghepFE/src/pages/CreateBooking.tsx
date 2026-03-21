@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { createTrip } from '@/data/trips';
+import { createTrip, getRecentTrip } from '@/data/trips';
 import { getCustomers, Customer } from '@/data/customers';
-import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone, Check, ChevronsUpDown, ArrowDownUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -158,6 +158,24 @@ const CreateBooking = () => {
       }));
       return next;
     });
+  };
+
+  const handleSwapLocations = () => {
+    // swap selections
+    const prevPickup = pickupSelection;
+    const prevDropoff = dropoffSelection;
+    setPickupSelection(prevDropoff);
+    setDropoffSelection(prevPickup);
+    
+    setFormData(prev => ({
+      ...prev,
+      pickupDetailAddress: prev.dropoffDetailAddress,
+      pickupProvinceCode: prev.dropoffProvinceCode,
+      pickupLocation: prev.dropoffLocation,
+      dropoffDetailAddress: prev.pickupDetailAddress,
+      dropoffProvinceCode: prev.pickupProvinceCode,
+      dropoffLocation: prev.pickupLocation,
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -420,11 +438,44 @@ const CreateBooking = () => {
                                     <CommandItem
                                       key={c.id}
                                       value={c.phone}
-                                      onSelect={() => {
+                                      onSelect={async () => {
                                         handleChange('customerPhone', c.phone);
                                         handleChange('customerName', c.name);
                                         setCustomerPhoneSearch(c.phone);
                                         setCustomerPhoneOpen(false);
+
+                                        try {
+                                          const recentTrip = await getRecentTrip(c.phone);
+                                          if (recentTrip) {
+                                            const extractDetail = (fullLocation: string, provinceCode?: string, districtCode?: string) => {
+                                              if (!fullLocation) return '';
+                                              const p = provinceOptions.find(opt => opt.code === provinceCode);
+                                              const d = p ? getDistricts(p.code).find(opt => opt.code === districtCode) : undefined;
+                                              const suffix = formatFullAddress({ province: p, district: d, ward: undefined });
+                                              if (suffix && fullLocation.endsWith(', ' + suffix)) {
+                                                return fullLocation.slice(0, -(suffix.length + 2));
+                                              } else if (suffix && fullLocation === suffix) {
+                                                return '';
+                                              }
+                                              return fullLocation;
+                                            };
+                                            
+                                            if (recentTrip.pickupProvinceCode) {
+                                              const p = provinceOptions.find(opt => opt.code === recentTrip.pickupProvinceCode);
+                                              const d = p ? getDistricts(p.code).find(opt => opt.code === recentTrip.pickupWardCode) : undefined;
+                                              updatePickupSelection(() => ({ province: p, district: d, ward: undefined }));
+                                              handleChange('pickupDetailAddress', extractDetail(recentTrip.pickupLocation, recentTrip.pickupProvinceCode, recentTrip.pickupWardCode));
+                                            }
+                                            if (recentTrip.dropoffProvinceCode) {
+                                              const p = provinceOptions.find(opt => opt.code === recentTrip.dropoffProvinceCode);
+                                              const d = p ? getDistricts(p.code).find(opt => opt.code === recentTrip.dropoffWardCode) : undefined;
+                                              updateDropoffSelection(() => ({ province: p, district: d, ward: undefined }));
+                                              handleChange('dropoffDetailAddress', extractDetail(recentTrip.dropoffLocation, recentTrip.dropoffProvinceCode, recentTrip.dropoffWardCode));
+                                            }
+                                          }
+                                        } catch (e) {
+                                          console.error("Failed to fetch recent trip", e);
+                                        }
                                       }}
                                     >
                                       <Check
@@ -571,9 +622,22 @@ const CreateBooking = () => {
                       />
                     </div>
 
+                    {/* Swap Button */}
+                    <div className="flex justify-center -my-3 relative z-10 w-full mb-1">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon" 
+                        className="rounded-full bg-white shadow hover:bg-sky-50 text-sky-600 border-sky-200"
+                        onClick={handleSwapLocations}
+                        title="Đảo ngược điểm đón và trả"
+                      >
+                        <ArrowDownUp size={18} />
+                      </Button>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label>Điểm trả *</Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Label>Điểm trả *</Label>                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select value={dropoffSelection.province?.code ?? ''} onValueChange={handleDropoffProvinceChange}>
                           <SelectTrigger>
                             <SelectValue placeholder="Chọn tỉnh/thành" />

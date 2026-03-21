@@ -20,4 +20,6 @@ public interface TripService {
     void delete(Long id);
 
     List<TripStatusHistoryDTO> getStatusHistory(Long tripId);
+
+    TripDTO getRecentTripByCustomerPhone(String customerPhone);
 }
