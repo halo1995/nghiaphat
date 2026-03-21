@@ -328,3 +328,13 @@ export const updateTripGroup = async (
 export const deleteTripGroup = async (id: string): Promise<void> => {
   await apiService.deleteTripGroup(Number(id));
 };
+
+export const addTripToGroup = async (groupId: string, tripId: string): Promise<TripGroup> => {
+  const updated = await apiService.addTripToGroup(Number(groupId), Number(tripId));
+  return mapTripGroupResponse(updated);
+};
+
+export const removeTripFromGroup = async (groupId: string, tripId: string): Promise<TripGroup> => {
+  const updated = await apiService.removeTripFromGroup(Number(groupId), Number(tripId));
+  return mapTripGroupResponse(updated);
+};

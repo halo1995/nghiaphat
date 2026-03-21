@@ -22,7 +22,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { TripGroup, Trip } from '@/data/trips';
-import { getTripGroups, getTrips, updateTrip, updateTripGroup, deleteTripGroup } from '@/data/trips';
+import { getTripGroups, deleteTripGroup, updateTripGroup, getTrips, updateTrip, addTripToGroup, removeTripFromGroup } from '@/data/trips';
 import type { Driver } from '@/data/drivers';
 import { getDrivers } from '@/data/drivers';
 import type { Vehicle } from '@/data/vehicles';
@@ -208,40 +208,10 @@ const GroupTrips = () => {
 
   const editGroupMutation = useMutation({
     mutationFn: async ({ group, tripIds, tripDetails, vehicle, driver }: EditPayload) => {
-      const originalTripIds = group.tripIds;
-      const removedTripIds = originalTripIds.filter((id) => !tripIds.includes(id));
-
-      await Promise.all(
-        removedTripIds.map((id) =>
-          updateTrip(id, {
-            groupId: '',
-            status: 'Đã xác nhận',
-            vehicleId: undefined,
-            vehicleName: undefined,
-            driverId: undefined,
-            driverName: undefined,
-          })
-        )
-      );
-
-      const nextTripStatus = vehicle && driver ? 'Đã phân xe' : 'Đã ghép chuyến';
       const vehicleId = vehicle?.id != null ? vehicle.id.toString() : undefined;
       const vehicleName = vehicle ? `${vehicle.name} - ${vehicle.licensePlate}` : undefined;
       const driverId = driver?.id != null ? driver.id.toString() : undefined;
       const driverName = driver?.name;
-
-      await Promise.all(
-        tripIds.map((id) =>
-          updateTrip(id, {
-            groupId: group.id,
-            status: nextTripStatus,
-            vehicleId,
-            vehicleName,
-            driverId,
-            driverName,
-          })
-        )
-      );
 
       const totalPassengers = tripDetails.reduce((sum, trip) => sum + (trip.passengers ?? 0), 0);
       const totalRevenue = tripDetails.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
@@ -279,30 +249,7 @@ const GroupTrips = () => {
 
   const removeTripMutation = useMutation({
     mutationFn: async ({ group, tripId }: RemoveTripPayload) => {
-      await updateTrip(tripId, {
-        groupId: '',
-        status: 'Đã xác nhận',
-        vehicleId: undefined,
-        vehicleName: undefined,
-        driverId: undefined,
-        driverName: undefined,
-      });
-
-      const remainingTripIds = group.tripIds.filter((id) => id !== tripId);
-      const remainingTrips = trips.filter((trip) => remainingTripIds.includes(trip.id));
-      const totalPassengers = remainingTrips.reduce((sum, trip) => sum + (trip.passengers ?? 0), 0);
-      const totalRevenue = remainingTrips.reduce((sum, trip) => sum + (trip.price ?? 0), 0);
-
-      await updateTripGroup(group.id, {
-        tripIds: remainingTripIds,
-        vehicleId: group.vehicleId,
-        vehicleName: group.vehicleName,
-        driverId: group.driverId,
-        driverName: group.driverName,
-        status: remainingTripIds.length === 0 ? 'Đang ghép' : group.status,
-        totalPassengers,
-        totalRevenue,
-      });
+      await removeTripFromGroup(group.id, tripId);
     },
     onSuccess: () => {
       // Only invalidate queries that need to be refetched
@@ -324,19 +271,6 @@ const GroupTrips = () => {
 
   const deleteGroupMutation = useMutation({
     mutationFn: async (group: TripGroup) => {
-      await Promise.all(
-        group.tripIds.map((tripId) =>
-          updateTrip(tripId, {
-            groupId: '',
-            status: 'Đã xác nhận',
-            vehicleId: undefined,
-            vehicleName: undefined,
-            driverId: undefined,
-            driverName: undefined,
-          })
-        )
-      );
-
       await deleteTripGroup(group.id);
     },
     onSuccess: () => {

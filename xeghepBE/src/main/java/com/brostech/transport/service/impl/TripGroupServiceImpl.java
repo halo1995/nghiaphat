@@ -70,11 +70,25 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .totalRevenue(req.getTotalRevenue())
                 .build();
 
-        // Calculate and set pickup date from trips
-        java.time.LocalDate pickupDate = calculatePickupDate(tripIds);
-        group.setPickupDate(pickupDate);
-
         group = tripGroupRepository.save(group);
+
+        // Update trips to link to this group
+        if (!tripIds.isEmpty()) {
+            List<Trip> trips = tripRepository.findAllById(tripIds);
+            for (Trip trip : trips) {
+                Trip.TripStatus previousStatus = trip.getStatus();
+                trip.setGroupId(group.getId().toString());
+                // Set status to DA_GHEP_CHUYEN if not already more advanced
+                if (trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN || trip.getStatus() == Trip.TripStatus.CHO_XAC_NHAN) {
+                    trip.setStatus(Trip.TripStatus.DA_GHEP_CHUYEN);
+                }
+                tripRepository.save(trip);
+                if (previousStatus != trip.getStatus()) {
+                    recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Ghép vào nhóm: " + group.getName());
+                }
+            }
+        }
+
         return toDTO(group);
     }
 
@@ -134,26 +148,91 @@ public class TripGroupServiceImpl implements TripGroupService {
             validateSamePickupDate(parseTripIds(req.getTripIds()));
         }
 
+        String oldTripIdsStr = group.getTripIds();
+        List<Long> oldTripIds = parseTripIds(oldTripIdsStr);
+        List<Long> newTripIds = parseTripIds(req.getTripIds());
+
         group.setName(req.getName());
         group.setTripIds(req.getTripIds());
         group.setVehicleId(req.getVehicleId());
         group.setVehicleName(req.getVehicleName());
         group.setDriverId(req.getDriverId());
         group.setDriverName(req.getDriverName());
-        if (req.getStatus() != null) {
-            group.setStatus(req.getStatus());
-        }
-        group.setTotalPassengers(req.getTotalPassengers());
-        group.setTotalRevenue(req.getTotalRevenue());
+        group.setStatus(req.getStatus());
+        // Update aggregates and pickup date based on new trips
+        List<Trip> currentTrips = tripRepository.findAllById(newTripIds);
+        int totalPassengers = currentTrips.stream().mapToInt(t -> t.getPassengers() != null ? t.getPassengers() : 0).sum();
+        double totalRevenue = currentTrips.stream().mapToDouble(t -> t.getPrice() != null ? t.getPrice().doubleValue() : 0.0).sum();
+        
+        group.setTotalPassengers(totalPassengers);
+        group.setTotalRevenue(totalRevenue);
+        group.setPickupDate(calculatePickupDate(newTripIds));
 
-        // Recalculate pickup date when tripIds change
-        if (req.getTripIds() != null) {
-            java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(req.getTripIds()));
-            group.setPickupDate(pickupDate);
+        final TripGroup savedGroup = tripGroupRepository.save(group);
+
+        // Handle trips removed from group
+        List<Long> removedIds = oldTripIds.stream().filter(tid -> !newTripIds.contains(tid)).toList();
+        for (Long tripId : removedIds) {
+            tripRepository.findById(tripId).ifPresent(trip -> {
+                Trip.TripStatus previousStatus = trip.getStatus();
+                trip.setGroupId(null);
+                trip.setVehicleId(null);
+                trip.setDriverId(null);
+                trip.setVehicleName(null);
+                trip.setDriverName(null);
+                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+                    trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
+                }
+                tripRepository.save(trip);
+                if (previousStatus != trip.getStatus()) {
+                    recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Bỏ khỏi nhóm (Update group)");
+                }
+            });
         }
 
-        group = tripGroupRepository.save(group);
-        return toDTO(group);
+        // Handle trips added to group
+        List<Long> addedIds = newTripIds.stream().filter(tid -> !oldTripIds.contains(tid)).toList();
+        Trip.TripStatus nextStatus = (group.getVehicleId() != null && group.getDriverId() != null)
+            ? Trip.TripStatus.DA_PHAN_XE : Trip.TripStatus.DA_GHEP_CHUYEN;
+
+        for (Long tripId : addedIds) {
+            tripRepository.findById(tripId).ifPresent(trip -> {
+                Trip.TripStatus previousStatus = trip.getStatus();
+                trip.setGroupId(savedGroup.getId().toString());
+                trip.setVehicleId(savedGroup.getVehicleId());
+                trip.setVehicleName(savedGroup.getVehicleName());
+                trip.setDriverId(savedGroup.getDriverId());
+                trip.setDriverName(savedGroup.getDriverName());
+
+                if (trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN || trip.getStatus() == Trip.TripStatus.CHO_XAC_NHAN) {
+                    trip.setStatus(nextStatus);
+                }
+                tripRepository.save(trip);
+                if (previousStatus != trip.getStatus()) {
+                    recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Thêm vào nhóm (Update group)");
+                }
+            });
+        }
+
+        // Ensure existing trips in group have the correct vehicle/driver/status if they changed
+        if (savedGroup.getVehicleId() != null && savedGroup.getDriverId() != null) {
+             List<Long> existingIds = newTripIds.stream().filter(oldTripIds::contains).toList();
+             for (Long tripId : existingIds) {
+                 tripRepository.findById(tripId).ifPresent(trip -> {
+                     trip.setVehicleId(savedGroup.getVehicleId());
+                     trip.setVehicleName(savedGroup.getVehicleName());
+                     trip.setDriverId(savedGroup.getDriverId());
+                     trip.setDriverName(savedGroup.getDriverName());
+                     if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN) {
+                         trip.setStatus(Trip.TripStatus.DA_PHAN_XE);
+                         recordStatusHistory(trip.getId(), Trip.TripStatus.DA_GHEP_CHUYEN, Trip.TripStatus.DA_PHAN_XE, "Cập nhật phân xe nhóm");
+                     }
+                     tripRepository.save(trip);
+                 });
+             }
+        }
+
+        return toDTO(savedGroup);
     }
 
     @Override
@@ -187,6 +266,7 @@ public class TripGroupServiceImpl implements TripGroupService {
     }
 
     @Override
+    @Transactional
     public TripGroupDTO assignVehicle(Long groupId, Long vehicleId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
@@ -204,6 +284,7 @@ public class TripGroupServiceImpl implements TripGroupService {
     }
 
     @Override
+    @Transactional
     public TripGroupDTO assignDriver(Long groupId, Long driverId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
@@ -221,6 +302,7 @@ public class TripGroupServiceImpl implements TripGroupService {
     }
 
     @Override
+    @Transactional
     public TripGroupDTO addTrip(Long groupId, Long tripId) {
         TripGroup group = tripGroupRepository.findById(groupId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
@@ -269,6 +351,25 @@ public class TripGroupServiceImpl implements TripGroupService {
         // Update pickup date if new trip has earlier pickup time
         java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(currentTripIds));
         group.setPickupDate(pickupDate);
+
+        // Update trip link and status
+        Trip.TripStatus previousStatus = trip.getStatus();
+        trip.setGroupId(group.getId().toString());
+        trip.setVehicleId(group.getVehicleId());
+        trip.setVehicleName(group.getVehicleName());
+        trip.setDriverId(group.getDriverId());
+        trip.setDriverName(group.getDriverName());
+        
+        Trip.TripStatus nextStatus = (group.getVehicleId() != null && group.getDriverId() != null)
+            ? Trip.TripStatus.DA_PHAN_XE : Trip.TripStatus.DA_GHEP_CHUYEN;
+            
+        if (trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN || trip.getStatus() == Trip.TripStatus.CHO_XAC_NHAN) {
+            trip.setStatus(nextStatus);
+        }
+        tripRepository.save(trip);
+        if (previousStatus != trip.getStatus()) {
+            recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Thêm vào nhóm: " + group.getName());
+        }
 
         group = tripGroupRepository.save(group);
         return toDTO(group);

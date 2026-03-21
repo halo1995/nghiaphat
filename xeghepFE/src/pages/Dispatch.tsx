@@ -58,15 +58,7 @@ const Dispatch = () => {
 
   const createGroupMutation = useMutation({
     mutationFn: createTripGroup,
-    onSuccess: async (newGroup) => {
-      // Update all trips in the group
-      for (const tripId of selectedTrips) {
-        await updateTrip(tripId, {
-          status: 'Đã ghép chuyến',
-          groupId: newGroup.id
-        });
-      }
-
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       queryClient.invalidateQueries({ queryKey: ['tripGroups'] });
 

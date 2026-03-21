@@ -725,6 +725,28 @@ class ApiService {
     }
   }
 
+  async addTripToGroup(groupId: number, tripId: number): Promise<TripGroupResponse> {
+    const response = await fetch(
+      this.buildUrl(`/trip-groups/${groupId}/add-trip?tripId=${tripId}`),
+      {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    return this.handleResponse<TripGroupResponse>(response);
+  }
+
+  async removeTripFromGroup(groupId: number, tripId: number): Promise<TripGroupResponse> {
+    const response = await fetch(
+      this.buildUrl(`/trip-groups/${groupId}/remove-trip?tripId=${tripId}`),
+      {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      }
+    );
+    return this.handleResponse<TripGroupResponse>(response);
+  }
+
   // Customer APIs
   async searchCustomers(query?: string, page: number = 0, size: number = 100): Promise<ApiResponse<CustomerResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
