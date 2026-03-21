@@ -8,6 +8,8 @@ import com.brostech.transport.jpa.repository.TripGroupRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
 import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.UserRepository;
+import com.brostech.transport.jpa.repository.TripStatusHistoryRepository;
+import com.brostech.transport.jpa.entity.TripStatusHistory;
 import com.brostech.transport.service.TripGroupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -44,6 +46,7 @@ public class TripGroupServiceImpl implements TripGroupService {
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final TripRepository tripRepository;
+    private final TripStatusHistoryRepository tripStatusHistoryRepository;
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final Set<Trip.TripStatus> DRIVER_CONFIRMED_STATUSES = EnumSet.of(Trip.TripStatus.DANG_DON,
@@ -154,10 +157,32 @@ public class TripGroupServiceImpl implements TripGroupService {
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         TripGroup group = tripGroupRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TripGroup not found"));
         assertGroupEditable(group);
+
+        List<Long> tripIds = parseTripIds(group.getTripIds());
+        if (!tripIds.isEmpty()) {
+            List<Trip> trips = tripRepository.findAllById(tripIds);
+            for (Trip trip : trips) {
+                Trip.TripStatus previousStatus = trip.getStatus();
+                trip.setGroupId(null);
+                trip.setVehicleId(null);
+                trip.setDriverId(null);
+                trip.setVehicleName(null);
+                trip.setDriverName(null);
+                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+                    trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
+                }
+                tripRepository.save(trip);
+                if (previousStatus != trip.getStatus()) {
+                    recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Xóa nhóm chuyến");
+                }
+            }
+        }
+
         tripGroupRepository.deleteById(id);
     }
 
@@ -284,6 +309,20 @@ public class TripGroupServiceImpl implements TripGroupService {
             // Recalculate pickup date from remaining trips
             java.time.LocalDate pickupDate = calculatePickupDate(parseTripIds(newTripIds.toString()));
             group.setPickupDate(pickupDate);
+        }
+
+        Trip.TripStatus previousStatus = trip.getStatus();
+        trip.setGroupId(null);
+        trip.setVehicleId(null);
+        trip.setDriverId(null);
+        trip.setVehicleName(null);
+        trip.setDriverName(null);
+        if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+            trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
+        }
+        tripRepository.save(trip);
+        if (previousStatus != trip.getStatus()) {
+            recordStatusHistory(trip.getId(), previousStatus, trip.getStatus(), "Loại khỏi nhóm chuyến");
         }
 
         group = tripGroupRepository.save(group);
@@ -429,5 +468,28 @@ public class TripGroupServiceImpl implements TripGroupService {
                 "Không thể tạo nhóm với các chuyến có ngày đón khác nhau. " +
                 "Một nhóm chỉ được chứa các chuyến cùng ngày đón.");
         }
+    }
+
+    private void recordStatusHistory(Long tripId, Trip.TripStatus fromStatus, Trip.TripStatus toStatus, String note) {
+        String actionBy = null;
+        String actionByName = null;
+        try {
+            org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails ud) {
+                actionBy = ud.getUsername();
+                actionByName = ud.getUsername();
+            }
+        } catch (Exception ignored) {}
+        TripStatusHistory history = TripStatusHistory.builder()
+                .tripId(tripId)
+                .fromStatus(fromStatus)
+                .toStatus(toStatus)
+                .actionAt(new Date())
+                .actionBy(actionBy)
+                .actionByName(actionByName)
+                .note(note)
+                .build();
+        tripStatusHistoryRepository.save(history);
     }
 }

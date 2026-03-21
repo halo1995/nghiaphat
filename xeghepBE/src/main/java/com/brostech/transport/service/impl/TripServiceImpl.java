@@ -270,9 +270,14 @@ public class TripServiceImpl implements TripService {
         if (req.getDropoffConfirmed() != null) {
             trip.setDropoffConfirmed(req.getDropoffConfirmed());
         }
-        if (req.getGroupId() != null) {
+        
+        // Handle groupId clearing if empty or null
+        if (req.getGroupId() != null && req.getGroupId().trim().isEmpty()) {
+            trip.setGroupId(null);
+        } else {
             trip.setGroupId(req.getGroupId());
         }
+
         if (req.getFullVehicle() != null) {
             trip.setFullVehicle(req.getFullVehicle());
         }
