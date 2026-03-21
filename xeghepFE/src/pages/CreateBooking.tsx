@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { getProvinces, getWards, formatFullAddress, AddressSelection } from '@/data/locations';
+import { getProvinces, getDistricts, formatFullAddress, AddressSelection } from '@/data/locations';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -26,10 +26,10 @@ type BookingFormData = {
   customerPhone: string;
   pickupLocation: string;
   pickupProvinceCode: string;
-  pickupWardCode: string;
+  pickupDetailAddress: string;
   dropoffLocation: string;
   dropoffProvinceCode: string;
-  dropoffWardCode: string;
+  dropoffDetailAddress: string;
   pickupTime: string;
   distance: number;
   price: number;
@@ -51,10 +51,10 @@ const CreateBooking = () => {
     customerPhone: '',
     pickupLocation: '',
     pickupProvinceCode: '',
-    pickupWardCode: '',
+    pickupDetailAddress: '',
     dropoffLocation: '',
     dropoffProvinceCode: '',
-    dropoffWardCode: '',
+    dropoffDetailAddress: '',
     pickupTime: '',
     distance: 0,
     price: 200000,
@@ -66,8 +66,8 @@ const CreateBooking = () => {
   const [pickupSelection, setPickupSelection] = useState<AddressSelection>({});
   const [dropoffSelection, setDropoffSelection] = useState<AddressSelection>({});
   const [pickupPickerOpen, setPickupPickerOpen] = useState(false);
-  const [pickupWardOpen, setPickupWardOpen] = useState(false);
-  const [dropoffWardOpen, setDropoffWardOpen] = useState(false);
+  const [pickupDistrictOpen, setPickupDistrictOpen] = useState(false);
+  const [dropoffDistrictOpen, setDropoffDistrictOpen] = useState(false);
   const [customerPhoneOpen, setCustomerPhoneOpen] = useState(false);
   const [customerPhoneSearch, setCustomerPhoneSearch] = useState('');
 
@@ -89,12 +89,12 @@ const CreateBooking = () => {
   const pickupProvinceCode = pickupSelection.province?.code;
   const dropoffProvinceCode = dropoffSelection.province?.code;
 
-  const pickupWardOptions = useMemo(
-    () => (pickupProvinceCode ? getWards(pickupProvinceCode) : []),
+  const pickupDistrictOptions = useMemo(
+    () => (pickupProvinceCode ? getDistricts(pickupProvinceCode) : []),
     [pickupProvinceCode]
   );
-  const dropoffWardOptions = useMemo(
-    () => (dropoffProvinceCode ? getWards(dropoffProvinceCode) : []),
+  const dropoffDistrictOptions = useMemo(
+    () => (dropoffProvinceCode ? getDistricts(dropoffProvinceCode) : []),
     [dropoffProvinceCode]
   );
 
@@ -103,12 +103,12 @@ const CreateBooking = () => {
       createTrip({
         customerName: data.customerName,
         customerPhone: data.customerPhone,
-        pickupLocation: data.pickupLocation,
+        pickupLocation: [data.pickupDetailAddress, data.pickupLocation].filter(Boolean).join(', '),
         pickupProvinceCode: data.pickupProvinceCode || undefined,
-        pickupWardCode: data.pickupWardCode || undefined,
-        dropoffLocation: data.dropoffLocation,
+        pickupWardCode: pickupSelection.district?.code || undefined,
+        dropoffLocation: [data.dropoffDetailAddress, data.dropoffLocation].filter(Boolean).join(', '),
         dropoffProvinceCode: data.dropoffProvinceCode || undefined,
-        dropoffWardCode: data.dropoffWardCode || undefined,
+        dropoffWardCode: dropoffSelection.district?.code || undefined,
         pickupTime: data.pickupTime,
         dropoffTime: undefined,
         distance: data.distance,
@@ -142,7 +142,6 @@ const CreateBooking = () => {
         ...current,
         pickupLocation: formatted,
         pickupProvinceCode: next.province?.code ?? '',
-        pickupWardCode: next.ward?.code ?? '',
       }));
       return next;
     });
@@ -156,7 +155,6 @@ const CreateBooking = () => {
         ...current,
         dropoffLocation: formatted,
         dropoffProvinceCode: next.province?.code ?? '',
-        dropoffWardCode: next.ward?.code ?? '',
       }));
       return next;
     });
@@ -175,14 +173,12 @@ const CreateBooking = () => {
     if (
       !pickupSelection.province ||
       !pickupSelection.district ||
-      !pickupSelection.ward ||
       !dropoffSelection.province ||
-      !dropoffSelection.district ||
-      !dropoffSelection.ward
+      !dropoffSelection.district
     ) {
       toast({
         title: 'Thiếu thông tin địa chỉ',
-        description: 'Vui lòng chọn đầy đủ tỉnh/thành, quận/huyện và phường/xã cho cả điểm đón và điểm trả.',
+        description: 'Vui lòng chọn đầy đủ tỉnh/thành và quận/huyện cho cả điểm đón và điểm trả.',
         variant: 'destructive',
       });
       return;
@@ -227,13 +223,13 @@ const CreateBooking = () => {
     updatePickupSelection(() => ({ province, district: undefined, ward: undefined }));
   };
 
-  const handlePickupWardChange = (wardCode: string) => {
-    if (!wardCode) {
-      updatePickupSelection(prev => ({ ...prev, ward: undefined, district: undefined }));
+  const handlePickupDistrictChange = (districtCode: string) => {
+    if (!districtCode) {
+      updatePickupSelection(prev => ({ ...prev, district: undefined, ward: undefined }));
       return;
     }
-    const ward = pickupWardOptions.find(option => option.code === wardCode);
-    updatePickupSelection(prev => ({ ...prev, ward, district: ward?.district }));
+    const district = pickupDistrictOptions.find(option => option.code === districtCode);
+    updatePickupSelection(prev => ({ ...prev, district, ward: undefined }));
   };
 
   const handleDropoffProvinceChange = (provinceCode: string) => {
@@ -245,13 +241,13 @@ const CreateBooking = () => {
     updateDropoffSelection(() => ({ province, district: undefined, ward: undefined }));
   };
 
-  const handleDropoffWardChange = (wardCode: string) => {
-    if (!wardCode) {
-      updateDropoffSelection(prev => ({ ...prev, ward: undefined, district: undefined }));
+  const handleDropoffDistrictChange = (districtCode: string) => {
+    if (!districtCode) {
+      updateDropoffSelection(prev => ({ ...prev, district: undefined, ward: undefined }));
       return;
     }
-    const ward = dropoffWardOptions.find(option => option.code === wardCode);
-    updateDropoffSelection(prev => ({ ...prev, ward, district: ward?.district }));
+    const district = dropoffDistrictOptions.find(option => option.code === districtCode);
+    updateDropoffSelection(prev => ({ ...prev, district, ward: undefined }));
   };
 
   const parseLocalDateTime = (value: string) => {
@@ -512,7 +508,7 @@ const CreateBooking = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Popover open={pickupWardOpen} onOpenChange={setPickupWardOpen}>
+                        <Popover open={pickupDistrictOpen} onOpenChange={setPickupDistrictOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -520,35 +516,35 @@ const CreateBooking = () => {
                               disabled={!pickupSelection.province}
                               className="w-full justify-between"
                             >
-                              {pickupSelection.ward
-                                ? `${pickupSelection.ward.name}${pickupSelection.district?.name ? ` (${pickupSelection.district.name})` : ''}`
-                                : 'Chọn phường/xã'}
+                              {pickupSelection.district
+                                ? pickupSelection.district.name
+                                : 'Chọn quận/huyện'}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[400px] p-0" align="start">
                             <Command filter={vietnameseFilter}>
                               <CommandInput
-                                placeholder="Tìm kiếm phường/xã, quận/huyện..."
+                                placeholder="Tìm kiếm quận/huyện..."
                               />
                               <CommandList>
                                 <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
                                 <CommandGroup>
-                                  {pickupWardOptions
+                                  {pickupDistrictOptions
                                     .filter(option => option.code)
                                     .map(option => {
-                                      const displayText = `${option.name}${option.district?.name ? ` (${option.district.name})` : ''}`;
+                                      const displayText = option.name;
                                       return (
                                         <CommandItem
                                           key={option.code}
                                           value={displayText}
                                           onSelect={() => {
-                                            handlePickupWardChange(option.code);
-                                            setPickupWardOpen(false);
+                                            handlePickupDistrictChange(option.code);
+                                            setPickupDistrictOpen(false);
                                           }}
                                         >
                                           <Check
-                                            className={`mr-2 h-4 w-4 ${pickupSelection.ward?.code === option.code
+                                            className={`mr-2 h-4 w-4 ${pickupSelection.district?.code === option.code
                                               ? 'opacity-100'
                                               : 'opacity-0'
                                               }`}
@@ -563,6 +559,11 @@ const CreateBooking = () => {
                           </PopoverContent>
                         </Popover>
                       </div>
+                      <Input
+                        value={formData.pickupDetailAddress}
+                        onChange={(e) => handleChange('pickupDetailAddress', e.target.value)}
+                        placeholder="Địa chỉ chi tiết điểm đón (số nhà, đường...)"
+                      />
                       <Input
                         value={formData.pickupLocation}
                         placeholder="Tự động hiển thị sau khi chọn khu vực"
@@ -585,7 +586,7 @@ const CreateBooking = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Popover open={dropoffWardOpen} onOpenChange={setDropoffWardOpen}>
+                        <Popover open={dropoffDistrictOpen} onOpenChange={setDropoffDistrictOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
@@ -593,33 +594,33 @@ const CreateBooking = () => {
                               disabled={!dropoffSelection.province}
                               className="w-full justify-between"
                             >
-                              {dropoffSelection.ward
-                                ? `${dropoffSelection.ward.name}${dropoffSelection.district?.name ? ` (${dropoffSelection.district.name})` : ''}`
-                                : 'Chọn phường/xã'}
+                              {dropoffSelection.district
+                                ? dropoffSelection.district.name
+                                : 'Chọn quận/huyện'}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-[400px] p-0" align="start">
                             <Command filter={vietnameseFilter}>
-                              <CommandInput placeholder="Tìm kiếm phường/xã, quận/huyện..." />
+                              <CommandInput placeholder="Tìm kiếm quận/huyện..." />
                               <CommandList>
                                 <CommandEmpty>Không tìm thấy kết quả</CommandEmpty>
                                 <CommandGroup>
-                                  {dropoffWardOptions
+                                  {dropoffDistrictOptions
                                     .filter(option => option.code)
                                     .map(option => {
-                                      const displayText = `${option.name}${option.district?.name ? ` (${option.district.name})` : ''}`;
+                                      const displayText = option.name;
                                       return (
                                         <CommandItem
                                           key={option.code}
                                           value={displayText}
                                           onSelect={() => {
-                                            handleDropoffWardChange(option.code);
-                                            setDropoffWardOpen(false);
+                                            handleDropoffDistrictChange(option.code);
+                                            setDropoffDistrictOpen(false);
                                           }}
                                         >
                                           <Check
-                                            className={`mr-2 h-4 w-4 ${dropoffSelection.ward?.code === option.code
+                                            className={`mr-2 h-4 w-4 ${dropoffSelection.district?.code === option.code
                                                 ? 'opacity-100'
                                                 : 'opacity-0'
                                               }`}
@@ -634,6 +635,11 @@ const CreateBooking = () => {
                           </PopoverContent>
                         </Popover>
                       </div>
+                      <Input
+                        value={formData.dropoffDetailAddress}
+                        onChange={(e) => handleChange('dropoffDetailAddress', e.target.value)}
+                        placeholder="Địa chỉ chi tiết điểm trả (số nhà, đường...)"
+                      />
                       <Input
                         value={formData.dropoffLocation}
                         placeholder="Tự động hiển thị sau khi chọn khu vực"

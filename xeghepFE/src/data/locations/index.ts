@@ -47,6 +47,30 @@ export const getProvinces = (): ProvinceOption[] => {
     });
 };
 
+export const getDistricts = (provinceCode: string): DistrictOption[] => {
+  const province = provinces.find(([code]) => code === provinceCode);
+  if (!province) return [];
+
+  const districts = province[4].map((district) => ({
+    code: district[0],
+    name: district[1],
+  }));
+
+  if (provinceCode === '37') {
+    const priority = ['372']; // Nho Quan district code
+    return districts.sort((a, b) => {
+      const aPriority = priority.indexOf(a.code);
+      const bPriority = priority.indexOf(b.code);
+      const aRank = aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority;
+      const bRank = bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  return districts.sort((a, b) => a.name.localeCompare(b.name));
+};
+
 export const getWards = (provinceCode: string): WardOption[] => {
   const province = provinces.find(([code]) => code === provinceCode);
   if (!province) return [];
