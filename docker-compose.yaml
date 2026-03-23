@@ -9,14 +9,12 @@ services:
       - "8080"
     environment:
       TZ: Asia/Ho_Chi_Minh
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://db:5432/postgres}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-vusuu4xcrJZJ13U}
       LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
-    depends_on:
-      - db
     networks:
       - app-network
     volumes:
@@ -54,38 +52,11 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  db:
-    image: postgres:16-alpine
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init:/docker-entrypoint-initdb.d:ro
-    networks:
-      - app-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 3G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 networks:
   app-network:
     driver: bridge
 
 volumes:
-  postgres_data:
-    driver: local
   backend_logs:
     driver: local
   ticket_images:
