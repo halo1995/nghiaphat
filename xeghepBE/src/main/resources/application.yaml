@@ -45,6 +45,7 @@ springdoc:
     url: ${SWAGGER_UI_URL:/v3/api-docs}
 
 server:
+  forward-headers-strategy: native
   tomcat:
     threads:
       max: ${REQUEST_MAX_THREAD:2500}
