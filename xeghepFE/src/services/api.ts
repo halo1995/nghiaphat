@@ -6,9 +6,9 @@ const detectDefaultBaseUrl = () => {
     if (origin.includes('localhost:3000') || origin.includes('127.0.0.1:3000')) {
       return 'http://localhost:8080/transport-service';
     }
-    return origin + '/transport-service';;
+    return 'https://api.xeghepnghiaphat.io.vn/transport-service';
   }
-  return 'http://localhost:8080/transport-service';
+  return 'https://api.xeghepnghiaphat.io.vn/transport-service';
 };
 
 export const API_BASE_URL = detectDefaultBaseUrl();
