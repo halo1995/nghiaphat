@@ -11,7 +11,7 @@ services:
       TZ: Asia/Ho_Chi_Minh
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/postgres
       SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
+      SPRING_DATASOURCE_PASSWORD: vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl
       LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
@@ -60,7 +60,7 @@ services:
       TZ: Asia/Ho_Chi_Minh
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
+      POSTGRES_PASSWORD: vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -123,7 +123,7 @@ services:
       POSTGRES_HOST: db
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Xf(I=1p*e<$$+A(B7^dGi
+      POSTGRES_PASSWORD: vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl
       # Backup mỗi ngày lúc 2h sáng, giữ 30 bản mới nhất
       BACKUP_CRON_EXPRESSION: "0 2 * * *"
       BACKUP_NUM_TO_KEEP: "30"
