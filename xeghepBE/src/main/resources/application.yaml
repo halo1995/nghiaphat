@@ -18,7 +18,9 @@ spring:
   jackson:
     default-property-inclusion: always
   datasource:
-    url: ${SPRING_DATASOURCE_URL:postgres://postgres:vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl@hdykenysoaribek9nhv0z9uv:5432/postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://103.162.20.246:3111/postgres}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl}
   jpa:
     show-sql: false
     hibernate:
@@ -54,3 +56,7 @@ payment:
     retention-days: ${PAYMENT_ATTACHMENTS_RETENTION_DAYS:40}
     max-files: ${PAYMENT_ATTACHMENTS_MAX_FILES:3}
     max-file-size-bytes: ${PAYMENT_ATTACHMENTS_MAX_FILE_SIZE_BYTES:10485760}
+
+app:
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:https://app.xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}

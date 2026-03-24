@@ -7,7 +7,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-
+ 
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ 
 # Bỏ qua bước kiểm tra TypeScript và chỉ chạy vite build
 RUN npx vite build
 
