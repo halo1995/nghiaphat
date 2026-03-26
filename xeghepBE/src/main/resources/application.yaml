@@ -18,17 +18,13 @@ spring:
   jackson:
     default-property-inclusion: always
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://103.162.20.246:3111/postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://103.162.20.246:5432/nghiaphat}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:vusuu4xcrJZJ13UWYHk4mNTmztogjGIreWpujMCcEErsYpBJ0yZVBJbBClRItrOl}
+    password: ${POSTGRES_PASSWORD:d0oKYItd31JU8bXNUAKd}
   jpa:
-    show-sql: false
+    show-sql: true
     hibernate:
       ddl-auto: update
-  flyway:
-    enabled: false
-    locations: classpath:db/migration
-    baseline-on-migrate: true
 
 jwt:
   secret: ${JWT_SECRET:GeCK9gAKzii51PHdlxBv7XRvYWYvyxn4DECYEEwmBYE=}
