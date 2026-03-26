@@ -40,13 +40,7 @@ services:
       - "traefik.http.routers.backend.rule=Host(`api.xeghepnghiaphat.io.vn`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls.certResolver=letsencrypt"
-      - "traefik.http.routers.backend.middlewares=cors"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://app.xeghepnghiaphat.io.vn,https://xeghepnghiaphat.io.vn"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS,PUT,DELETE,PATCH"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
-      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=3600"
 
   frontend:
     build:
