@@ -18,7 +18,7 @@ spring:
   jackson:
     default-property-inclusion: always
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://103.162.20.246:5432/nghiaphat}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nghiaphat}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:d0oKYItd31JU8bXNUAKd}
   jpa:
