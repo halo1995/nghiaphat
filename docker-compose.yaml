@@ -9,9 +9,9 @@ services:
       - "8080"
     environment:
       TZ: Asia/Ho_Chi_Minh
-      SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nghiaphat
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: d0oKYItd31JU8bXNUAKd
+      # SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nghiaphat
+      # SPRING_DATASOURCE_USERNAME: postgres
+      # SPRING_DATASOURCE_PASSWORD: d0oKYItd31JU8bXNUAKd
       LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
