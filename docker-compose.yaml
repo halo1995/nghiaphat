@@ -12,7 +12,7 @@ services:
       SERVER_PORT: 8080
       LOGGING_FILE_PATH: /app/logs
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
 
       # === KẾT NỐI DATABASE (sẽ dùng Internal URL) ===
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
@@ -42,7 +42,7 @@ services:
       - "traefik.http.routers.backend.tls.certResolver=letsencrypt"
       - "traefik.http.routers.backend.middlewares=cors"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://app.xeghepnghiaphat.io.vn"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://app.xeghepnghiaphat.io.vn,https://xeghepnghiaphat.io.vn"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS,PUT,DELETE,PATCH"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
@@ -71,7 +71,7 @@ services:
         max-file: "3"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`app.xeghepnghiaphat.io.vn`)" # domain của frontend
+      - "traefik.http.routers.frontend.rule=Host(`app.xeghepnghiaphat.io.vn`) || Host(`xeghepnghiaphat.io.vn`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certResolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
