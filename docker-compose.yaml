@@ -9,15 +9,18 @@ services:
       - "8080"
     environment:
       TZ: Asia/Ho_Chi_Minh
-      # SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nghiaphat
-      # SPRING_DATASOURCE_USERNAME: postgres
-      # SPRING_DATASOURCE_PASSWORD: d0oKYItd31JU8bXNUAKd
-      LOGGING_FILE_PATH: /app/logs
       SERVER_PORT: 8080
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
+      LOGGING_FILE_PATH: /app/logs
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
+
+      # === KẾT NỐI DATABASE (sẽ dùng Internal URL) ===
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+
     networks:
-      - app-network
+      - dokploy-network
     volumes:
       - backend_logs:/app/logs
       - ticket_images:/app/data/ticket-images
@@ -38,11 +41,11 @@ services:
       context: ./xeghepFE
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.xeghepnghiaphat.io.vn/transport-service}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     expose:
       - "80"
     networks:
-      - app-network
+      - dokploy-network
     restart: unless-stopped
     deploy:
       resources:
@@ -56,8 +59,8 @@ services:
         max-file: "3"
 
 networks:
-  app-network:
-    driver: bridge
+  dokploy-network:
+    external: true
 
 volumes:
   backend_logs:

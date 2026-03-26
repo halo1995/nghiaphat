@@ -19,8 +19,8 @@ spring:
     default-property-inclusion: always
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://103.162.20.246:5432/nghiaphat}
-    username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:d0oKYItd31JU8bXNUAKd}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:d0oKYItd31JU8bXNUAKd}
   jpa:
     show-sql: true
     hibernate:
