@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("transport-service/trips")
+@RequestMapping("/transport-service/trips")
 public class TripController {
 
     private final TripService tripService;

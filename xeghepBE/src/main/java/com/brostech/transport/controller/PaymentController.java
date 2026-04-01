@@ -43,7 +43,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("transport-service/payments")
+@RequestMapping("/transport-service/payments")
 @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
 public class PaymentController {
 

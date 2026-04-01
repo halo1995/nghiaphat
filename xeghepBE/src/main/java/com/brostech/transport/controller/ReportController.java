@@ -13,7 +13,7 @@ import java.util.Date;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("transport-service/reports")
+@RequestMapping("/transport-service/reports")
 public class ReportController {
 
     private final ReportService reportService;

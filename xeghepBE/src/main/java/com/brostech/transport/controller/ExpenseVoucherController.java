@@ -21,7 +21,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("transport-service/expenses")
+@RequestMapping("/transport-service/expenses")
 @PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
 public class ExpenseVoucherController {
 
