@@ -12,9 +12,10 @@ services:
       SERVER_PORT: 8080
       LOGGING_FILE_PATH: /app/logs
       JAVA_TOOL_OPTIONS: -Xmx3g -Xms1g
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://app.xeghepnghiaphat.io.vn,https://xeghepnghiaphat.io.vn,https://api.xeghepnghiaphat.io.vn,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173}
+      # Chỉ cần domain chính
+      ALLOWED_ORIGINS: "https://xeghepnghiaphat.io.vn"
 
-      # === KẾT NỐI DATABASE (sẽ dùng Internal URL) ===
+      # === KẾT NỐI DATABASE ===
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
@@ -30,24 +31,23 @@ services:
         limits:
           cpus: "2.5"
           memory: 3.5G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.xeghepnghiaphat.io.vn`)"
+      # Rule: Chỉ nhận các request có đường dẫn bắt đầu bằng /transport-service
+      - "traefik.http.routers.backend.rule=Host(`xeghepnghiaphat.io.vn`) && PathPrefix(`/transport-service`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls.certResolver=letsencrypt"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
+      # Độ ưu tiên cao hơn Frontend để bắt đúng path /transport-service
+      - "traefik.http.routers.backend.priority=10"
 
   frontend:
     build:
       context: ./xeghepFE
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # Cấu hình để FE gọi đúng path của Backend
+        VITE_API_BASE_URL: /transport-service
     expose:
       - "80"
     networks:
@@ -58,17 +58,15 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`app.xeghepnghiaphat.io.vn`) || Host(`xeghepnghiaphat.io.vn`)"
+      # Rule: Nhận tất cả các request còn lại gửi đến domain chính
+      - "traefik.http.routers.frontend.rule=Host(`xeghepnghiaphat.io.vn`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certResolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # Độ ưu tiên thấp hơn Backend
+      - "traefik.http.routers.frontend.priority=1"
 
 networks:
   dokploy-network:
