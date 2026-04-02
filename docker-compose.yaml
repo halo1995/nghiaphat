@@ -39,7 +39,7 @@ services:
       - "traefik.http.routers.backend.tls.certResolver=letsencrypt"
       - "traefik.http.services.backend.loadbalancer.server.port=8080"
       # Độ ưu tiên cao hơn Frontend để bắt đúng path /transport-service
-      - "traefik.http.routers.backend.priority=1000"
+      - "traefik.http.routers.backend.priority=100"
 
   frontend:
     build:
