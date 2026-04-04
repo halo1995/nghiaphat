@@ -10,11 +10,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Download, ReceiptText } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useAuth } from '@/contexts/AuthContext';
 
 const DriverLedger = () => {
+    const { user } = useAuth();
+    const isDriver = user?.role === 'DRIVER';
     const [selectedDriverId, setSelectedDriverId] = useState<string>('all');
     const [page, setPage] = useState(0);
     const size = 20;
+
+    React.useEffect(() => {
+        if (isDriver && user?.id) {
+            setSelectedDriverId(user.id.toString());
+        }
+    }, [isDriver, user?.id]);
 
     const { data: driversData } = useQuery({
         queryKey: ['drivers-list-simple'],
@@ -75,24 +84,26 @@ const DriverLedger = () => {
                         <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between">
                             <div className="space-y-1">
                                 <CardTitle className="text-lg">Bộ lọc giao dịch</CardTitle>
-                                <CardDescription>Lọc theo tài xế cụ thể</CardDescription>
+                                <CardDescription>{isDriver ? 'Giao dịch cá nhân' : 'Lọc theo tài xế cụ thể'}</CardDescription>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Select value={selectedDriverId} onValueChange={(v) => {
-                                    setSelectedDriverId(v);
-                                    setPage(0);
-                                }}>
-                                    <SelectTrigger className="w-[200px] md:w-[250px]">
-                                        <SelectValue placeholder="Chọn tài xế" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Tất cả tài xế</SelectItem>
-                                        {drivers.map(d => (
-                                            <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.phone})</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {!isDriver && (
+                                <div className="flex items-center gap-2">
+                                    <Select value={selectedDriverId} onValueChange={(v) => {
+                                        setSelectedDriverId(v);
+                                        setPage(0);
+                                    }}>
+                                        <SelectTrigger className="w-[200px] md:w-[250px]">
+                                            <SelectValue placeholder="Chọn tài xế" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Tất cả tài xế</SelectItem>
+                                            {drivers.map(d => (
+                                                <SelectItem key={d.id} value={d.id.toString()}>{d.name} ({d.phone})</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </div>
                     </CardHeader>
                     <CardContent className="p-0 overflow-x-auto border-t">

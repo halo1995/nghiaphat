@@ -79,6 +79,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final CompanyWalletRepository companyWalletRepository;
     private final CompanyTransactionRepository companyTransactionRepository;
     private final DriverTransactionRepository driverTransactionRepository;
+    private final com.brostech.transport.service.GoogleSheetsService googleSheetsService;
     
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -105,6 +106,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
             
             payment = tripPaymentRepository.save(payment);
+            googleSheetsService.appendTripPaymentRow(payment, tripRepository.findById(req.getTripId()).orElse(null));
             adjustDriverOutstanding(driver, req.getAmount(), DriverTransaction.ReferenceType.TRIP_CASH_COLLECTED, payment.getId(), "Thu tiền mặt chuyến", null);
             double currentEarnings = Objects.requireNonNullElse(driver.getTotalEarnings(), 0.0);
             driver.setTotalEarnings(currentEarnings + req.getAmount());
@@ -188,6 +190,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
 
             payment = tripPaymentRepository.save(payment);
+            googleSheetsService.appendTripPaymentRow(payment, trip);
             
             if (firstPayment == null) {
                 firstPayment = payment;
@@ -277,6 +280,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
             
             deposit = depositRecordRepository.save(deposit);
+            googleSheetsService.appendDepositRow(deposit);
             adjustDriverOutstanding(driver, -req.getAmount(), DriverTransaction.ReferenceType.DEPOSIT_TO_COMPANY, deposit.getId(), "Nộp tiền về công ty", null);
             userRepository.save(driver);
             creditCompanyWallet(req.getAmount(),
@@ -357,6 +361,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
 
             deposit = depositRecordRepository.save(deposit);
+            googleSheetsService.appendDepositRow(deposit);
             
             if (firstDeposit == null) {
                 firstDeposit = deposit;

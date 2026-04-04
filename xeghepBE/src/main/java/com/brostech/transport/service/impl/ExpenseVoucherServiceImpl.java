@@ -41,6 +41,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
     private final UserRepository userRepository;
     private final DriverExpenseAdvanceRepository driverExpenseAdvanceRepository;
     private final PaymentService paymentService;
+    private final com.brostech.transport.service.GoogleSheetsService googleSheetsService;
 
     private final SimpleDateFormat dateTimeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -70,6 +71,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
                 .build();
 
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        googleSheetsService.appendOrUpdateExpenseVoucherRow(saved);
         recordHistory(saved.getId(), null, saved.getStatus(), actor.getId(), "Khởi tạo phiếu chi");
 
         if (request.isSubmitImmediately()) {
@@ -328,6 +330,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         voucher.setSubmittedAt(new Date());
         voucher.setUpdatedAt(new Date());
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        googleSheetsService.appendOrUpdateExpenseVoucherRow(saved);
         recordHistory(saved.getId(), ExpenseVoucher.Status.DRAFT, ExpenseVoucher.Status.PENDING, actorId,
                 note != null ? note : "Gửi duyệt phiếu chi");
         return saved;
@@ -343,6 +346,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         // Tiền sẽ được trừ khi kế toán xác nhận chuyển tiền (trạng thái PAID)
 
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        googleSheetsService.appendOrUpdateExpenseVoucherRow(saved);
         recordHistory(saved.getId(), ExpenseVoucher.Status.PENDING, ExpenseVoucher.Status.APPROVED, actorId,
                 note != null ? note : "Duyệt chi");
         return saved;
@@ -361,6 +365,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         applyPaymentImpact(voucher, actorId, note);
 
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        googleSheetsService.appendOrUpdateExpenseVoucherRow(saved);
         
         // Cập nhật trạng thái phiếu tạm ứng tài xế nếu có
         if (voucher.getDriverExpenseAdvanceId() != null) {
@@ -387,6 +392,7 @@ public class ExpenseVoucherServiceImpl implements ExpenseVoucherService {
         voucher.setUpdatedAt(new Date());
 
         ExpenseVoucher saved = voucherRepository.save(voucher);
+        googleSheetsService.appendOrUpdateExpenseVoucherRow(saved);
         recordHistory(saved.getId(), ExpenseVoucher.Status.PENDING, ExpenseVoucher.Status.REJECTED, actorId, reason);
         return saved;
     }

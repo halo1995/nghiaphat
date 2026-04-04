@@ -513,10 +513,13 @@ class ApiService {
 
   async getDriverTransactions(driverId?: number, page: number = 0, size: number = 20): Promise<ApiResponse<DriverTransactionResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    
+    let url = `${this.buildUrl('/payments/driver-transactions')}?${params}`;
     if (driverId != null) {
-      params.append('driverId', driverId.toString());
+      url = `${this.buildUrl(`/drivers/${driverId}/transactions`)}?${params}`;
     }
-    const response = await fetch(`${this.buildUrl('/payments/driver-transactions')}?${params}`, {
+    
+    const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DriverTransactionResponse>>(response);

@@ -5,6 +5,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getTrips, type Trip } from '@/data/trips';
+import { getDriver } from '@/data/drivers';
 import { Calendar, MapPin, Users, Clock, ArrowRight, CheckCircle, Wallet, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -88,6 +89,14 @@ const DriverDashboard = () => {
     queryFn: () => getDriverExpenseAdvances({ driverId }),
     enabled: isAuthenticated && !authLoading && !!driverId,
   });
+
+  const { data: driverInfo } = useQuery({
+    queryKey: ['driver-info', driverId],
+    queryFn: () => getDriver(Number(driverId)),
+    enabled: isAuthenticated && !authLoading && !!driverId,
+  });
+
+  const walletBalance = driverInfo?.outstandingBalance || 0;
 
   const driverAdvanceMutation = useMutation({
     mutationFn: createDriverExpenseAdvance,
@@ -276,6 +285,20 @@ const DriverDashboard = () => {
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">Tạm ứng đang chờ</p>
                 <p className="text-2xl font-bold text-purple-600 md:text-3xl">{formatCurrency(pendingAdvance)}</p>
+              </CardContent>
+            </Card>
+            <Card className="col-span-2 md:col-span-2 border-amber-200 bg-amber-50">
+              <CardContent className="p-4 flex justify-between items-center h-full">
+                <div>
+                  <p className="text-sm font-medium text-amber-800 mb-1">Tiền thu hộ / Cần nộp Cty</p>
+                  <p className="text-2xl font-bold text-amber-700 md:text-3xl">{formatCurrency(walletBalance)}</p>
+                </div>
+                <Link to="/accounting/driver-ledger">
+                  <Button variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100 uppercase text-xs font-semibold px-4">
+                    Lịch sử quỹ
+                    <ArrowRight size={16} className="ml-2" />
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>

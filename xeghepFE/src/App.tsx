@@ -174,7 +174,7 @@ function App() {
               {/* Kế toán */}
               <Route path="/accounting" element={<RoleRoute allowed={["admin", "accountant"]}><Accounting /></RoleRoute>} />
               <Route path="/accounting/expenses" element={<RoleRoute allowed={["admin", "accountant"]}><ExpenseVouchers /></RoleRoute>} />
-              <Route path="/accounting/driver-ledger" element={<RoleRoute allowed={["admin", "accountant"]}><DriverLedger /></RoleRoute>} />
+              <Route path="/accounting/driver-ledger" element={<RoleRoute allowed={["admin", "accountant", "driver"]}><DriverLedger /></RoleRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Route>

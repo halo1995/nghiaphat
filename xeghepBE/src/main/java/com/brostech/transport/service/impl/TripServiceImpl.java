@@ -17,6 +17,8 @@ import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.TripStatusHistoryRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
 import com.brostech.transport.jpa.entity.TripStatusHistory;
+import com.brostech.transport.service.CustomerService;
+import com.brostech.transport.service.GoogleSheetsService;
 import com.brostech.transport.service.PaymentService;
 import com.brostech.transport.service.TripService;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,7 @@ public class TripServiceImpl implements TripService {
     private final CustomerAdvancePaymentRepository customerAdvancePaymentRepository;
     private final TripGroupRepository tripGroupRepository;
     private final TripStatusHistoryRepository tripStatusHistoryRepository;
+    private final GoogleSheetsService googleSheetsService;
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
@@ -129,6 +132,7 @@ public class TripServiceImpl implements TripService {
         recordStatusHistory(trip.getId(), null, trip.getStatus(), null);
         trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, null);
+        googleSheetsService.appendTripRow(trip);
         return toDTO(trip);
     }
 
@@ -291,6 +295,7 @@ public class TripServiceImpl implements TripService {
         }
         trip = ensureTripGroupForFullVehicle(trip);
         autoRecordDriverCollection(trip, previousStatus);
+        googleSheetsService.updateTripRow(trip);
         return toDTO(trip);
     }
 
