@@ -106,63 +106,111 @@ const DriverLedger = () => {
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent className="p-0 overflow-x-auto border-t">
-                        <Table>
-                            <TableHeader className="bg-muted/50">
-                                <TableRow>
-                                    <TableHead className="w-[150px] font-semibold">Thời gian</TableHead>
-                                    {selectedDriverId === 'all' && <TableHead className="font-semibold">Tài xế</TableHead>}
-                                    <TableHead className="font-semibold">Loại giao dịch</TableHead>
-                                    <TableHead className="text-right font-semibold">Biến động (₫)</TableHead>
-                                    <TableHead className="text-right font-semibold">Dư nợ sau GD (₫)</TableHead>
-                                    <TableHead className="font-semibold">Chi tiết</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={selectedDriverId === 'all' ? 6 : 5} className="h-32 text-center text-muted-foreground">
-                                            Đang tải dữ liệu...
-                                        </TableCell>
-                                    </TableRow>
-                                ) : transactions.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={selectedDriverId === 'all' ? 6 : 5} className="h-32 text-center">
-                                            <div className="flex flex-col items-center justify-center space-y-2">
-                                                <ReceiptText className="h-8 w-8 text-muted-foreground/50" />
-                                                <span className="text-muted-foreground">Không có giao dịch nào</span>
+                    <CardContent className="p-0 border-t">
+                        {/* Mobile view */}
+                        <div className="block md:hidden">
+                            {isLoading ? (
+                                <div className="p-8 text-center text-muted-foreground">Đang tải dữ liệu...</div>
+                            ) : transactions.length === 0 ? (
+                                <div className="p-8 flex flex-col items-center justify-center space-y-2">
+                                    <ReceiptText className="h-8 w-8 text-muted-foreground/50" />
+                                    <span className="text-muted-foreground">Không có giao dịch nào</span>
+                                </div>
+                            ) : (
+                                <div className="divide-y">
+                                    {transactions.map((tx) => (
+                                        <div key={tx.id} className="p-4 space-y-3">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="text-xs text-muted-foreground mb-1">
+                                                        {format(new Date(tx.createdAt), 'dd/MM/yyyy HH:mm')}
+                                                    </div>
+                                                    {selectedDriverId === 'all' && (
+                                                        <div className="font-medium text-sm mb-1">
+                                                            {drivers.find(d => d.id.toString() === tx.driverId)?.name || `Tài xế #${tx.driverId}`}
+                                                        </div>
+                                                    )}
+                                                    {getReferenceTypeBadge(tx.referenceType)}
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className={`text-base font-bold ${getTransactionTypeColor(tx.transactionType)}`}>
+                                                        {tx.transactionType === 'CREDIT' ? '+' : '-'}
+                                                        {Math.abs(tx.amount).toLocaleString('vi-VN')}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </TableCell>
+                                            <div className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-md border border-gray-100">
+                                                <span className="text-muted-foreground font-medium">Dư nợ sau GD:</span>
+                                                <span className="font-bold text-gray-700">{tx.balanceAfter.toLocaleString('vi-VN')} ₫</span>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground italic bg-gray-50/50 p-2 rounded border border-gray-100" title={tx.description}>
+                                                Lý do: {tx.description}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Desktop view */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-muted/50">
+                                    <TableRow>
+                                        <TableHead className="w-[150px] font-semibold">Thời gian</TableHead>
+                                        {selectedDriverId === 'all' && <TableHead className="font-semibold">Tài xế</TableHead>}
+                                        <TableHead className="font-semibold">Loại giao dịch</TableHead>
+                                        <TableHead className="text-right font-semibold">Biến động (₫)</TableHead>
+                                        <TableHead className="text-right font-semibold">Dư nợ sau GD (₫)</TableHead>
+                                        <TableHead className="font-semibold">Chi tiết</TableHead>
                                     </TableRow>
-                                ) : (
-                                    transactions.map((tx) => (
-                                        <TableRow key={tx.id} className="hover:bg-muted/30">
-                                            <TableCell className="whitespace-nowrap text-xs md:text-sm">
-                                                {format(new Date(tx.createdAt), 'dd/MM/yyyy HH:mm')}
-                                            </TableCell>
-                                            {selectedDriverId === 'all' && (
-                                                <TableCell className="font-medium">
-                                                    {drivers.find(d => d.id.toString() === tx.driverId)?.name || `Tài xế #${tx.driverId}`}
-                                                </TableCell>
-                                            )}
-                                            <TableCell>
-                                                {getReferenceTypeBadge(tx.referenceType)}
-                                            </TableCell>
-                                            <TableCell className={`text-right font-bold ${getTransactionTypeColor(tx.transactionType)}`}>
-                                                {tx.transactionType === 'CREDIT' ? '+' : '-'}
-                                                {Math.abs(tx.amount).toLocaleString('vi-VN')}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">
-                                                {tx.balanceAfter.toLocaleString('vi-VN')}
-                                            </TableCell>
-                                            <TableCell className="max-w-[200px] truncate text-muted-foreground" title={tx.description}>
-                                                {tx.description}
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={selectedDriverId === 'all' ? 6 : 5} className="h-32 text-center text-muted-foreground">
+                                                Đang tải dữ liệu...
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                                    ) : transactions.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={selectedDriverId === 'all' ? 6 : 5} className="h-32 text-center">
+                                                <div className="flex flex-col items-center justify-center space-y-2">
+                                                    <ReceiptText className="h-8 w-8 text-muted-foreground/50" />
+                                                    <span className="text-muted-foreground">Không có giao dịch nào</span>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        transactions.map((tx) => (
+                                            <TableRow key={tx.id} className="hover:bg-muted/30">
+                                                <TableCell className="whitespace-nowrap text-xs md:text-sm">
+                                                    {format(new Date(tx.createdAt), 'dd/MM/yyyy HH:mm')}
+                                                </TableCell>
+                                                {selectedDriverId === 'all' && (
+                                                    <TableCell className="font-medium">
+                                                        {drivers.find(d => d.id.toString() === tx.driverId)?.name || `Tài xế #${tx.driverId}`}
+                                                    </TableCell>
+                                                )}
+                                                <TableCell>
+                                                    {getReferenceTypeBadge(tx.referenceType)}
+                                                </TableCell>
+                                                <TableCell className={`text-right font-bold ${getTransactionTypeColor(tx.transactionType)}`}>
+                                                    {tx.transactionType === 'CREDIT' ? '+' : '-'}
+                                                    {Math.abs(tx.amount).toLocaleString('vi-VN')}
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium">
+                                                    {tx.balanceAfter.toLocaleString('vi-VN')}
+                                                </TableCell>
+                                                <TableCell className="max-w-[200px] truncate text-muted-foreground" title={tx.description}>
+                                                    {tx.description}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </CardContent>
                 </Card>
 
