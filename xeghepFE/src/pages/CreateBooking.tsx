@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { createTrip, getRecentTrip } from '@/data/trips';
-import { getCustomers, Customer } from '@/data/customers';
+import { searchCustomers, Customer } from '@/data/customers';
 import { ArrowLeft, Calendar as CalendarIcon, Plus, Phone, Check, ChevronsUpDown, ArrowDownUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -70,20 +70,28 @@ const CreateBooking = () => {
   const [dropoffDistrictOpen, setDropoffDistrictOpen] = useState(false);
   const [customerPhoneOpen, setCustomerPhoneOpen] = useState(false);
   const [customerPhoneSearch, setCustomerPhoneSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
-  const { data: allCustomers = [] } = useQuery({
-    queryKey: ['customers'],
-    queryFn: getCustomers,
-    staleTime: 5 * 60 * 1000,
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(customerPhoneSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customerPhoneSearch]);
+
+  // Server-side search
+  const { data: filteredCustomers = [], isFetching: isCustomersFetching } = useQuery({
+    queryKey: ['customers', 'search', debouncedSearch],
+    queryFn: () => searchCustomers(debouncedSearch),
+    enabled: debouncedSearch.length >= 2,
+    staleTime: 30 * 1000,
   });
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerPhoneSearch || customerPhoneSearch.length < 2) return [];
-    const q = customerPhoneSearch.toLowerCase();
-    return allCustomers
-      .filter((c: Customer) => c.phone.includes(q) || c.name.toLowerCase().includes(q))
-      .slice(0, 10);
-  }, [allCustomers, customerPhoneSearch]);
+  useEffect(() => {
+    setIsSearching(customerPhoneSearch.length >= 2 && isCustomersFetching);
+  }, [customerPhoneSearch, isCustomersFetching]);
 
   const provinceOptions = useMemo(() => getProvinces(), []);
   const pickupProvinceCode = pickupSelection.province?.code;
@@ -429,10 +437,20 @@ const CreateBooking = () => {
                               }}
                             />
                             <CommandList>
-                              {filteredCustomers.length === 0 && customerPhoneSearch.length >= 2 && (
+                              {isSearching && (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  Đang tìm kiếm...
+                                </div>
+                              )}
+                              {!isSearching && filteredCustomers.length === 0 && customerPhoneSearch.length >= 2 && (
                                 <CommandEmpty>Không tìm thấy KH. Sẽ tạo mới.</CommandEmpty>
                               )}
-                              {filteredCustomers.length > 0 && (
+                              {!isSearching && customerPhoneSearch.length < 2 && customerPhoneSearch.length > 0 && (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  Nhập ít nhất 2 ký tự để tìm kiếm
+                                </div>
+                              )}
+                              {!isSearching && filteredCustomers.length > 0 && (
                                 <CommandGroup heading="Khách hàng cũ">
                                   {filteredCustomers.map((c: Customer) => (
                                     <CommandItem

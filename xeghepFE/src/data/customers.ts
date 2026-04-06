@@ -48,6 +48,14 @@ export const getCustomers = async (): Promise<Customer[]> => {
   return response.content.map(mapCustomer);
 };
 
+export const searchCustomers = async (query: string): Promise<Customer[]> => {
+  if (!query || query.trim().length < 2) {
+    return [];
+  }
+  const response = await apiService.searchCustomers(query.trim(), 0, 10);
+  return response.content.map(mapCustomer);
+};
+
 export const getCustomerById = async (id: string): Promise<Customer | undefined> => {
   const numericId = Number(id);
   if (Number.isNaN(numericId)) {
