@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { createCustomerAdvance, getCustomerAdvances, type CustomerAdvanceMethod, type CustomerAdvancePayment, type CustomerAdvanceStatus } from '@/data/accounting';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -71,6 +72,8 @@ const CallCenter = () => {
   const [pickupLocationFilter, setPickupLocationFilter] = useState('');
   const [dropoffLocationFilter, setDropoffLocationFilter] = useState('');
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [scheduleForm, setScheduleForm] = useState({
     pickupLocation: '',
     pickupProvinceCode: '',
@@ -521,6 +524,19 @@ const CallCenter = () => {
     return base;
   }, [trips, searchTerm, statusFilter, dateFilter, pickupTimeRange, pickupTimeOrder, pickupLocationFilter, dropoffLocationFilter]);
 
+  // Pagination for filtered results
+  const totalFilteredTrips = filteredTrips.length;
+  const totalPages = Math.ceil(totalFilteredTrips / pageSize);
+  const paginatedTrips = useMemo(() => {
+    const startIndex = page * pageSize;
+    return filteredTrips.slice(startIndex, startIndex + pageSize);
+  }, [filteredTrips, page, pageSize]);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter, dateFilter, pickupTimeRange, pickupTimeOrder, pickupLocationFilter, dropoffLocationFilter]);
+
   const statusColors: Record<string, string> = {
     'Chờ xác nhận': 'bg-orange-100 text-orange-700 border-orange-200',
     'Đã xác nhận': 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -916,8 +932,9 @@ const CallCenter = () => {
               <p className="text-muted-foreground">Không tìm thấy chuyến đi nào</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {filteredTrips.map((trip, index) => {
+            <>
+              <div className="grid grid-cols-1 gap-4">
+                {paginatedTrips.map((trip, index) => {
                 const advancesForTrip = customerAdvancesByTrip.get(trip.id) ?? [];
                 const reconciledFromTrip = trip.customerAdvanceReconciled ?? 0;
                 const pendingFromTrip = trip.customerAdvancePending ?? 0;
@@ -1117,6 +1134,26 @@ const CallCenter = () => {
                 );
               })}
             </div>
+
+            {/* Pagination */}
+            {totalFilteredTrips > 0 && (
+              <Card>
+                <CardContent className="p-0">
+                  <PaginationControls
+                    currentPage={page}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    totalItems={totalFilteredTrips}
+                    onPageChange={setPage}
+                    onPageSizeChange={(size) => {
+                      setPageSize(size);
+                      setPage(0);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </>
           )}
         </div>
       </main>

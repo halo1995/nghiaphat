@@ -1,32 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useVehicles } from '@/hooks/useApi';
+import { useQuery } from '@tanstack/react-query';
+import { getVehiclesPaginated } from '@/data/vehicles';
 import { Search, Fuel, Gauge, Users, Star, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const VehicleList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const navigate = useNavigate();
   
-  const { data: vehiclesData, isLoading } = useVehicles(searchTerm);
-  const vehicles = vehiclesData?.content || [];
-
-  const filteredVehicles = vehicles.filter(vehicle => {
-    const matchesSearch = 
-      vehicle.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vehicle.licensePlate.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
+  const { data, isLoading } = useQuery({
+    queryKey: ['vehicles', 'paginated', page, pageSize, searchTerm],
+    queryFn: () => getVehiclesPaginated(page, pageSize, searchTerm || undefined),
   });
+
+  const vehicles = data?.vehicles || [];
+  const totalPages = data?.totalPages || 0;
+  const totalElements = data?.totalElements || 0;
+
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter(vehicle => {
+      const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
+      return matchesStatus;
+    });
+  }, [vehicles, statusFilter]);
 
   const statusColors: Record<string, string> = {
     'Sẵn sàng': 'bg-green-500 text-white',
@@ -58,12 +64,18 @@ const VehicleList = () => {
                       type="text"
                       placeholder="Tìm kiếm theo tên, hãng hoặc biển số..."
                       value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setPage(0);
+                      }}
                       className="pl-10"
                     />
                   </div>
                   <div className="md:w-48">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={statusFilter} onValueChange={(value) => {
+                      setStatusFilter(value);
+                      setPage(0);
+                    }}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Lọc trạng thái" />
                       </SelectTrigger>
@@ -95,8 +107,9 @@ const VehicleList = () => {
               <p className="text-muted-foreground">Không tìm thấy xe nào</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredVehicles.map((vehicle, index) => (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredVehicles.map((vehicle, index) => (
                 <motion.div
                   key={vehicle.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -169,6 +182,24 @@ const VehicleList = () => {
                 </motion.div>
               ))}
             </div>
+
+            {/* Pagination */}
+            <Card>
+              <CardContent className="p-0">
+                <PaginationControls
+                  currentPage={page}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={totalElements}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(0);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </>
           )}
         </div>
       </main>

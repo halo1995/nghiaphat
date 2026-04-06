@@ -58,6 +58,23 @@ export const getDrivers = async (): Promise<Driver[]> => {
   return response.content.map(mapDriverResponseToDriver);
 };
 
+export const getDriversPaginated = async (page: number = 0, size: number = 20, query?: string): Promise<{
+  drivers: Driver[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}> => {
+  const response = await apiService.getDrivers(query, page, size);
+  return {
+    drivers: response.content.map(mapDriverResponseToDriver),
+    totalPages: response.pageable.totalPages,
+    totalElements: response.pageable.totalElements,
+    currentPage: response.pageable.pageNumber,
+    pageSize: response.pageable.pageSize,
+  };
+};
+
 export const getDriver = async (id: number): Promise<Driver> => {
   const driver = await apiService.getDriver(id);
   return mapDriverResponseToDriver(driver);

@@ -48,6 +48,23 @@ export const getCustomers = async (): Promise<Customer[]> => {
   return response.content.map(mapCustomer);
 };
 
+export const getCustomersPaginated = async (page: number = 0, size: number = 20, query?: string): Promise<{
+  customers: Customer[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}> => {
+  const response = await apiService.searchCustomers(query, page, size);
+  return {
+    customers: response.content.map(mapCustomer),
+    totalPages: response.pageable.totalPages,
+    totalElements: response.pageable.totalElements,
+    currentPage: response.pageable.pageNumber,
+    pageSize: response.pageable.pageSize,
+  };
+};
+
 export const searchCustomers = async (query: string): Promise<Customer[]> => {
   if (!query || query.trim().length < 2) {
     return [];

@@ -5,35 +5,32 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDrivers } from '@/hooks/useApi';
-import { mapDriverResponseToDriver, updateDriver } from '@/data/drivers';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { mapDriverResponseToDriver, updateDriver, getDriversPaginated } from '@/data/drivers';
 import type { DriverRequest } from '@/services/api';
 import type { Driver } from '@/data/drivers';
 import { useToast } from '@/hooks/use-toast';
 import { Search, Star, TrendingUp, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const Drivers = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const navigate = useNavigate();
 
-  const { data: driversData, isLoading } = useDrivers(searchTerm);
-  const drivers = useMemo<Driver[]>(() => {
-    return (driversData?.content ?? []).map(mapDriverResponseToDriver);
-  }, [driversData]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['drivers', 'paginated', page, pageSize, searchTerm],
+    queryFn: () => getDriversPaginated(page, pageSize, searchTerm || undefined),
+  });
 
-  const filteredDrivers = useMemo(() =>
-    drivers.filter((driver) =>
-      driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      driver.phone.includes(searchTerm) ||
-      driver.email.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-  [drivers, searchTerm]);
+  const drivers = data?.drivers || [];
+  const totalPages = data?.totalPages || 0;
+  const totalElements = data?.totalElements || 0;
 
   const statusOptions: { value: DriverRequest['status']; label: string }[] = [
     { value: 'HOAT_DONG', label: 'Hoạt động' },
@@ -117,7 +114,10 @@ const Drivers = () => {
                     type="text"
                     placeholder="Tìm kiếm theo tên, số điện thoại, email..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(0);
+                    }}
                     className="pl-10"
                   />
                 </div>
@@ -134,13 +134,14 @@ const Drivers = () => {
             <div className="text-center py-12">
               <p className="text-muted-foreground">Đang tải...</p>
             </div>
-          ) : filteredDrivers.length === 0 ? (
+          ) : drivers.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Không tìm thấy tài xế nào</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredDrivers.map((driver, index) => (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {drivers.map((driver, index) => (
                 <motion.div
                   key={driver.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -248,6 +249,24 @@ const Drivers = () => {
                 </motion.div>
               ))}
             </div>
+
+            {/* Pagination */}
+            <Card>
+              <CardContent className="p-0">
+                <PaginationControls
+                  currentPage={page}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={totalElements}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(0);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </>
           )}
         </div>
       </main>

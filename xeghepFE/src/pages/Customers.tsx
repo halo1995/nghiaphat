@@ -6,25 +6,26 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
-import { getCustomers } from '@/data/customers';
+import { getCustomersPaginated } from '@/data/customers';
 import { Search, Star, TrendingUp, Calendar, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   
   const navigate = useNavigate();
 
-  const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['customers'],
-    queryFn: getCustomers,
+  const { data, isLoading } = useQuery({
+    queryKey: ['customers', 'paginated', page, pageSize, searchTerm],
+    queryFn: () => getCustomersPaginated(page, pageSize, searchTerm || undefined),
   });
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone.includes(searchTerm) ||
-    customer.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const customers = data?.customers || [];
+  const totalPages = data?.totalPages || 0;
+  const totalElements = data?.totalElements || 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -59,7 +60,10 @@ const Customers = () => {
                     type="text"
                     placeholder="Tìm kiếm theo tên, số điện thoại, email..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPage(0);
+                    }}
                     className="pl-10"
                   />
                 </div>
@@ -76,13 +80,14 @@ const Customers = () => {
             <div className="text-center py-12">
               <p className="text-muted-foreground">Đang tải...</p>
             </div>
-          ) : filteredCustomers.length === 0 ? (
+          ) : customers.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Không tìm thấy khách hàng nào</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCustomers.map((customer, index) => (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {customers.map((customer, index) => (
                 <motion.div
                   key={customer.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -162,6 +167,24 @@ const Customers = () => {
                 </motion.div>
               ))}
             </div>
+
+            {/* Pagination */}
+            <Card>
+              <CardContent className="p-0">
+                <PaginationControls
+                  currentPage={page}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={totalElements}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(0);
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </>
           )}
         </div>
       </main>

@@ -73,6 +73,23 @@ export const getVehicles = async (): Promise<Vehicle[]> => {
   return response.content.map(mapVehicleResponse);
 };
 
+export const getVehiclesPaginated = async (page: number = 0, size: number = 20, query?: string): Promise<{
+  vehicles: Vehicle[];
+  totalPages: number;
+  totalElements: number;
+  currentPage: number;
+  pageSize: number;
+}> => {
+  const response = await apiService.getVehicles(query, page, size);
+  return {
+    vehicles: response.content.map(mapVehicleResponse),
+    totalPages: response.pageable.totalPages,
+    totalElements: response.pageable.totalElements,
+    currentPage: response.pageable.pageNumber,
+    pageSize: response.pageable.pageSize,
+  };
+};
+
 export const getVehicleById = async (id: string): Promise<Vehicle> => {
   const vehicle = await apiService.getVehicle(parseInt(id));
   return mapVehicleResponse(vehicle);
