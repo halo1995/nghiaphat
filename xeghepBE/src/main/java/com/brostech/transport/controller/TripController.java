@@ -11,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
+import com.brostech.transport.service.ExcelImportService;
 
 @RestController
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ import java.util.List;
 public class TripController {
 
     private final TripService tripService;
+    private final ExcelImportService excelImportService;
 
     @PostMapping
     public TripDTO create(@Valid @RequestBody TripRequest req) {
@@ -54,5 +57,12 @@ public class TripController {
     @GetMapping("/{id}/status-history")
     public List<TripStatusHistoryDTO> getStatusHistory(@PathVariable Long id) {
         return tripService.getStatusHistory(id);
+    }
+
+
+
+    @PostMapping("/import")
+    public ExcelImportService.ImportResult importTrips(@RequestParam("file") MultipartFile file) {
+        return excelImportService.importTripsFromExcel(file);
     }
 }
