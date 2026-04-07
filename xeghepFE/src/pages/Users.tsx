@@ -12,7 +12,7 @@ const Users: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -247,7 +247,7 @@ const Users: React.FC = () => {
             </TableBody>
           </Table>
 
-          {!isLoading && totalPages > 1 && (
+          {!isLoading && totalElements > 0 && (
             <div className="mt-4">
               <PaginationControls
                 currentPage={page}
@@ -255,7 +255,11 @@ const Users: React.FC = () => {
                 totalItems={totalElements}
                 pageSize={pageSize}
                 onPageChange={setPage}
-                showPageSize={false}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(0);
+                }}
+                showPageSize={true}
               />
             </div>
           )}
