@@ -5,6 +5,7 @@ import { getDrivers } from '@/data/drivers';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PaginationControls } from "@/components/PaginationControls";
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -214,35 +215,16 @@ const DriverLedger = () => {
                     </CardContent>
                 </Card>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-2">
-                        <div className="text-sm text-muted-foreground hidden sm:block">
-                            Hiển thị {(page * size) + 1} - {Math.min((page + 1) * size, totalTransactions)} / {totalTransactions} giao dịch
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPage(p => Math.max(0, p - 1))}
-                                disabled={page === 0}
-                            >
-                                <ChevronLeft className="h-4 w-4 mr-1" />
-                                Trước
-                            </Button>
-                            <div className="text-sm font-medium px-2">
-                                Trang {page + 1} / {totalPages}
-                            </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                                disabled={page >= totalPages - 1}
-                            >
-                                Sau
-                                <ChevronRight className="h-4 w-4 ml-1" />
-                            </Button>
-                        </div>
+                {transactionsData && transactionsData.total > 0 && (
+                    <div className="mt-4 border-t pt-2">
+                        <PaginationControls
+                            currentPage={page}
+                            totalPages={totalPages}
+                            pageSize={size}
+                            totalItems={totalTransactions}
+                            onPageChange={setPage}
+                            showPageSize={false}
+                        />
                     </div>
                 )}
             </main>

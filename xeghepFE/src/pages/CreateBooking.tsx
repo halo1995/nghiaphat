@@ -85,12 +85,12 @@ const CreateBooking = () => {
   const { data: filteredCustomers = [], isFetching: isCustomersFetching } = useQuery({
     queryKey: ['customers', 'search', debouncedSearch],
     queryFn: () => searchCustomers(debouncedSearch),
-    enabled: debouncedSearch.length >= 2,
+    enabled: true,
     staleTime: 30 * 1000,
   });
 
   useEffect(() => {
-    setIsSearching(customerPhoneSearch.length >= 2 && isCustomersFetching);
+    setIsSearching(customerPhoneSearch.length >= 1 && isCustomersFetching);
   }, [customerPhoneSearch, isCustomersFetching]);
 
   const provinceOptions = useMemo(() => getProvinces(), []);
@@ -442,12 +442,12 @@ const CreateBooking = () => {
                                   Đang tìm kiếm...
                                 </div>
                               )}
-                              {!isSearching && filteredCustomers.length === 0 && customerPhoneSearch.length >= 2 && (
+                              {!isSearching && filteredCustomers.length === 0 && customerPhoneSearch.length >= 1 && (
                                 <CommandEmpty>Không tìm thấy KH. Sẽ tạo mới.</CommandEmpty>
                               )}
-                              {!isSearching && customerPhoneSearch.length < 2 && customerPhoneSearch.length > 0 && (
+                              {!isSearching && customerPhoneSearch.length < 1 && customerPhoneSearch.length > 0 && (
                                 <div className="py-6 text-center text-sm text-muted-foreground">
-                                  Nhập ít nhất 2 ký tự để tìm kiếm
+                                  Nhập ít nhất 1 ký tự để tìm kiếm
                                 </div>
                               )}
                               {!isSearching && filteredCustomers.length > 0 && (

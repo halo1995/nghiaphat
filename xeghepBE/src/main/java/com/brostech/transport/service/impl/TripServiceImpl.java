@@ -17,7 +17,6 @@ import com.brostech.transport.jpa.repository.TripRepository;
 import com.brostech.transport.jpa.repository.TripStatusHistoryRepository;
 import com.brostech.transport.jpa.repository.VehicleRepository;
 import com.brostech.transport.jpa.entity.TripStatusHistory;
-import com.brostech.transport.service.CustomerService;
 import com.brostech.transport.service.GoogleSheetsService;
 import com.brostech.transport.service.PaymentService;
 import com.brostech.transport.service.TripService;

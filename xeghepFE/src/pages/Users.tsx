@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUsers, createUser, deleteUser, updateUser, type User } from '@/data/auth';
+import { getUsersPaginated, createUser, deleteUser, updateUser, type User } from '@/data/auth';
+import { PaginationControls } from '@/components/PaginationControls';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -10,11 +11,29 @@ import { useToast } from '@/hooks/use-toast';
 const Users: React.FC = () => {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const usersQ = useQuery({ queryKey: ['users'], queryFn: getUsers });
+  // Debounce search
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0); // Reset page on search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const users = usersQ.data ?? [];
+  const usersQ = useQuery({
+    queryKey: ['users', page, pageSize, debouncedSearch],
+    queryFn: () => getUsersPaginated(debouncedSearch || undefined, page, pageSize),
+  });
+
+  const users = usersQ.data?.content ?? [];
   const isLoading = usersQ.isLoading;
+  const totalPages = usersQ.data?.totalPages ?? 0;
+  const totalElements = usersQ.data?.totalElements ?? 0;
 
   const roleOptions = useMemo(
     () => [
@@ -170,8 +189,15 @@ const Users: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle>Danh sách người dùng</CardTitle>
+          <div className="w-72">
+            <Input
+              placeholder="Tìm kiếm người dùng..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -186,7 +212,7 @@ const Users: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {usersQ.data?.map((u) => (
+              {users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell>{u.username}</TableCell>
                   <TableCell>{u.name}</TableCell>
@@ -220,6 +246,19 @@ const Users: React.FC = () => {
               ))}
             </TableBody>
           </Table>
+
+          {!isLoading && totalPages > 1 && (
+            <div className="mt-4">
+              <PaginationControls
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                showPageSize={false}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

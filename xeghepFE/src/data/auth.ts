@@ -1,7 +1,7 @@
 // This file now serves as a compatibility layer for existing imports
 // All actual API calls should use the hooks in hooks/useApi.ts
 
-import type { LoginRequest, UserResponse, CreateUserRequest } from '@/services/api';
+import type { LoginRequest, UserResponse, CreateUserRequest, ApiResponse } from '@/services/api';
 import { apiService } from '@/services/apiService';
 
 // Legacy interface for compatibility
@@ -44,8 +44,27 @@ export const login = async (username: string, password: string) => {
 };
 
 
+export const getUsersPaginated = async (
+  keyword?: string,
+  page: number = 0,
+  size: number = 10
+): Promise<ApiResponse<User>> => {
+  const response = await apiService.getUsers(keyword, page, size);
+  return {
+    content: response.content.map(mapUserResponseToUser),
+    totalPages: response.pageable?.totalPages ?? response.totalPages ?? 0,
+    totalElements: response.pageable?.totalElements ?? response.totalElements ?? 0,
+    pageSize: response.pageable?.pageSize ?? response.pageSize ?? 0,
+    pageNumber: response.pageable?.pageNumber ?? response.pageNumber ?? 0,
+    last: response.last,
+    first: response.first,
+    numberOfElements: response.numberOfElements,
+    empty: response.empty,
+  };
+};
+
 export const getUsers = async (): Promise<User[]> => {
-  const response = await apiService.getUsers();
+  const response = await apiService.getUsers(undefined, 0, 1000); // For legacy compatibility
   return response.content.map(mapUserResponseToUser);
 };
 

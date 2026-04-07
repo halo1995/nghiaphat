@@ -38,8 +38,10 @@ import {
 } from './api';
 
 class ApiService {
-  private buildUrl(path: string): string {
-    return API_BASE_URL + path;
+  private buildUrl(path: string, params?: URLSearchParams): string {
+    const url = API_BASE_URL + path;
+    const queryString = params?.toString();
+    return queryString ? `${url}?${queryString}` : url;
   }
 
   private getAuthHeaders(mode: 'json' | 'multipart' = 'json'): HeadersInit {
@@ -119,7 +121,7 @@ class ApiService {
     });
     if (keyword) params.append('q', keyword);
 
-    const response = await fetch(`${this.buildUrl('/auth/users')}?${params}`, {
+    const response = await fetch(this.buildUrl('/auth/users', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<UserResponse>>(response);
@@ -154,6 +156,8 @@ class ApiService {
   }
 
   // Driver APIs
+
+
   async getDrivers(keyword?: string, page: number = 0, size: number = 10): Promise<ApiResponse<DriverResponse>> {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -161,7 +165,7 @@ class ApiService {
     });
     if (keyword) params.append('q', keyword);
 
-    const response = await fetch(`${this.buildUrl('/drivers')}?${params}`, {
+    const response = await fetch(this.buildUrl('/drivers', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DriverResponse>>(response);
@@ -222,7 +226,7 @@ class ApiService {
     });
     if (keyword) params.append('q', keyword);
 
-    const response = await fetch(`${this.buildUrl('/vehicles')}?${params}`, {
+    const response = await fetch(this.buildUrl('/vehicles', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<VehicleResponse>>(response);
@@ -273,7 +277,7 @@ class ApiService {
       params.append('date', dateStr);
     }
 
-    const response = await fetch(`${this.buildUrl('/trips')}?${params}`, {
+    const response = await fetch(this.buildUrl('/trips', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripResponse>>(response);
@@ -315,7 +319,7 @@ class ApiService {
   }
 
   async getRecentTrip(phone: string): Promise<TripResponse | null> {
-    const response = await fetch(`${this.buildUrl('/trips/recent')}?phone=${encodeURIComponent(phone)}`, {
+    const response = await fetch(this.buildUrl('/trips/recent', new URLSearchParams({ phone })), {
       headers: this.getAuthHeaders(),
     });
     if (!response.ok) {
@@ -332,7 +336,7 @@ class ApiService {
     if (driverId != null) {
       params.append('driverId', driverId.toString());
     }
-    const response = await fetch(`${this.buildUrl('/payments/trips')}?${params}`, {
+    const response = await fetch(this.buildUrl('/payments/trips', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<TripPaymentResponse>>(response);
@@ -363,7 +367,7 @@ class ApiService {
     if (driverId != null) {
       params.append('driverId', driverId.toString());
     }
-    const response = await fetch(`${this.buildUrl('/payments/deposits')}?${params}`, {
+    const response = await fetch(this.buildUrl('/payments/deposits', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DepositRecordResponse>>(response);
@@ -399,7 +403,7 @@ class ApiService {
     if (status) params.append('status', status);
     if (tripId != null) params.append('tripId', tripId.toString());
 
-    const response = await fetch(`${this.buildUrl('/payments/customer-advances')}?${params}`, {
+    const response = await fetch(this.buildUrl('/payments/customer-advances', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<CustomerAdvancePaymentResponse>>(response);
@@ -444,7 +448,7 @@ class ApiService {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
 
-    const response = await fetch(`${this.buildUrl('/payments/driver-advances')}?${params}`, {
+    const response = await fetch(this.buildUrl('/payments/driver-advances', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<DriverExpenseAdvanceResponse>>(response);
@@ -480,7 +484,7 @@ class ApiService {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
     const query = params.toString();
-    const url = `${this.buildUrl('/payments/summary')}${query ? `?${query}` : ''}`;
+    const url = this.buildUrl('/payments/summary', query ? new URLSearchParams(query) : undefined);
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
@@ -492,7 +496,7 @@ class ApiService {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
     const query = params.toString();
-    const url = `${this.buildUrl('/payments/summary/export')}${query ? `?${query}` : ''}`;
+    const url = this.buildUrl('/payments/summary/export', query ? new URLSearchParams(query) : undefined);
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
@@ -505,7 +509,7 @@ class ApiService {
   async getDriverDailySummary(driverId: number, date: string): Promise<DriverDailySummaryResponse> {
     const params = new URLSearchParams({ date });
     const response = await fetch(
-      `${this.buildUrl(`/drivers/${driverId}/daily-summary`)}?${params}`,
+      this.buildUrl(`/drivers/${driverId}/daily-summary`, params),
       { headers: this.getAuthHeaders() }
     );
     return this.handleResponse<DriverDailySummaryResponse>(response);
@@ -514,9 +518,11 @@ class ApiService {
   async getDriverTransactions(driverId?: number, page: number = 0, size: number = 20): Promise<ApiResponse<DriverTransactionResponse>> {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     
-    let url = `${this.buildUrl('/payments/driver-transactions')}?${params}`;
+    let url: string;
     if (driverId != null) {
-      url = `${this.buildUrl(`/drivers/${driverId}/transactions`)}?${params}`;
+      url = this.buildUrl(`/drivers/${driverId}/transactions`, params);
+    } else {
+      url = this.buildUrl('/payments/driver-transactions', params);
     }
     
     const response = await fetch(url, {
@@ -547,7 +553,7 @@ class ApiService {
     if (options.createdBy != null) params.append('createdBy', options.createdBy.toString());
     if (options.walletId != null) params.append('walletId', options.walletId.toString());
 
-    const response = await fetch(`${this.buildUrl('/expenses/vouchers')}?${params}`, {
+    const response = await fetch(this.buildUrl('/expenses/vouchers', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<ExpenseVoucherResponse>>(response);
@@ -569,7 +575,7 @@ class ApiService {
     if (options.createdBy != null) params.append('createdBy', options.createdBy.toString());
     if (options.walletId != null) params.append('walletId', options.walletId.toString());
 
-    const response = await fetch(`${this.buildUrl('/expenses/export')}?${params}`, {
+    const response = await fetch(this.buildUrl('/expenses/export', params), {
       headers: this.getAuthHeaders(),
     });
     if (!response.ok) {
@@ -665,7 +671,7 @@ class ApiService {
     const params = new URLSearchParams();
     if (from) params.append('from', from);
     if (to) params.append('to', to);
-    const url = `${this.buildUrl('/expenses/summary')}${params.toString() ? `?${params}` : ''}`;
+    const url = this.buildUrl('/expenses/summary', params);
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
@@ -755,7 +761,7 @@ class ApiService {
     const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
     if (query) params.append('q', query);
 
-    const response = await fetch(`${this.buildUrl('/customers')}?${params}`, {
+    const response = await fetch(this.buildUrl('/customers', params), {
       headers: this.getAuthHeaders(),
     });
     return this.handleResponse<ApiResponse<CustomerResponse>>(response);
