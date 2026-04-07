@@ -4,12 +4,16 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.xe
 
 export interface ApiResponse<T> {
   content: T[];
-  pageable: {
+  pageable?: {
     pageNumber: number;
     pageSize: number;
     totalPages: number;
     totalElements: number;
   };
+  totalPages?: number;
+  totalElements?: number;
+  pageNumber?: number;
+  pageSize?: number;
   last: boolean;
   first: boolean;
   numberOfElements: number;

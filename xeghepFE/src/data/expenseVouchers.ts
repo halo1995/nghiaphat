@@ -71,6 +71,7 @@ export interface ExpenseVoucherList {
   page: number;
   size: number;
   total: number;
+  totalPages: number;
 }
 
 export interface ExpenseVoucherQuery {
@@ -202,9 +203,10 @@ export const getExpenseVouchers = async (query: ExpenseVoucherQuery = {}): Promi
   });
   return {
     items: response.content.map(mapVoucher),
-    page: response.pageable.pageNumber,
-    size: response.pageable.pageSize,
-    total: response.pageable.totalElements,
+    page: response.pageable?.pageNumber ?? response.pageNumber ?? 0,
+    size: response.pageable?.pageSize ?? response.pageSize ?? 20,
+    total: response.pageable?.totalElements ?? response.totalElements ?? 0,
+    totalPages: response.pageable?.totalPages ?? response.totalPages ?? 0,
   };
 };
 

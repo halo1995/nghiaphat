@@ -67,7 +67,7 @@ public class CustomerServiceImpl implements CustomerService {
         if (keyword == null || keyword.isBlank()) {
             return customerRepository.findAll(pageable).map(this::toDTO);
         }
-        return customerRepository.findByNameContainingIgnoreCase(keyword, pageable).map(this::toDTO);
+        return customerRepository.findByNameContainingIgnoreCaseOrPhoneContaining(keyword, keyword, pageable).map(this::toDTO);
     }
 
     /**

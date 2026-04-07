@@ -27,6 +27,18 @@ const Customers = () => {
   const totalPages = data?.totalPages || 0;
   const totalElements = data?.totalElements || 0;
 
+  // Debug - XEM CONSOLE
+  React.useEffect(() => {
+    console.log('=== CUSTOMERS PAGE DEBUG ===');
+    console.log('Data from API:', data);
+    console.log('Customers count:', customers.length);
+    console.log('Total pages:', totalPages);
+    console.log('Total elements:', totalElements);
+    console.log('Current page:', page);
+    console.log('Page size:', pageSize);
+    console.log('Is loading:', isLoading);
+  }, [data, customers.length, totalPages, totalElements, page, pageSize, isLoading]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Hoạt động':

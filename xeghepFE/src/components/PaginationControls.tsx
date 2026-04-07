@@ -75,27 +75,28 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   const startItem = currentPage * pageSize + 1;
   const endItem = Math.min((currentPage + 1) * pageSize, totalItems);
 
-  if (totalPages === 0) {
+  // Không hiển thị pagination nếu không có items
+  if (totalItems === 0) {
     return null;
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4">
-      <div className="text-sm text-muted-foreground">
-        Hiển thị <span className="font-medium">{startItem}</span> -{' '}
-        <span className="font-medium">{endItem}</span> của{' '}
-        <span className="font-medium">{totalItems}</span> kết quả
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4">
+      <div className="text-sm text-muted-foreground order-2 sm:order-1">
+        Hiển thị <span className="font-medium text-foreground">{startItem}</span> -{' '}
+        <span className="font-medium text-foreground">{endItem}</span> trong tổng số{' '}
+        <span className="font-medium text-foreground">{totalItems}</span> kết quả
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-4 order-1 sm:order-2">
         {showPageSize && onPageSizeChange && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Hiển thị:</span>
+          <div className="flex items-center gap-2 mr-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Số hàng:</span>
             <Select
               value={pageSize.toString()}
               onValueChange={(value) => onPageSizeChange(Number(value))}
             >
-              <SelectTrigger className="w-[70px] h-8">
+              <SelectTrigger className="w-[70px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -109,42 +110,45 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
           </div>
         )}
 
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => currentPage > 0 && onPageChange(currentPage - 1)}
-                className={currentPage === 0 ? 'pointer-events-none opacity-50' : ''}
-              />
-            </PaginationItem>
+        {totalPages > 0 && (
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => currentPage > 0 && onPageChange(currentPage - 1)}
+                  className={currentPage === 0 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
 
-            {getPageNumbers().map((page, index) =>
-              page === 'ellipsis' ? (
-                <PaginationItem key={`ellipsis-${index}`}>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              ) : (
-                <PaginationItem key={page}>
-                  <PaginationLink
-                    onClick={() => onPageChange(page)}
-                    isActive={currentPage === page}
-                  >
-                    {page + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              )
-            )}
+              {getPageNumbers().map((page, index) =>
+                page === 'ellipsis' ? (
+                  <PaginationItem key={`ellipsis-${index}`}>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      onClick={() => onPageChange(page)}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                )
+              )}
 
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => currentPage < totalPages - 1 && onPageChange(currentPage + 1)}
-                className={
-                  currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : ''
-                }
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => currentPage < totalPages - 1 && onPageChange(currentPage + 1)}
+                  className={
+                    currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'
+                  }
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </div>
     </div>
   );

@@ -605,8 +605,8 @@ export const getDriverTransactions = async (
     }));
     return {
       data,
-      total: response.pageable.totalElements,
-      page: response.pageable.pageNumber,
+      total: response.pageable?.totalElements ?? response.totalElements ?? 0,
+      page: response.pageable?.pageNumber ?? response.pageNumber ?? 0,
     };
   } catch (error) {
     console.error('Error fetching driver transactions:', error);

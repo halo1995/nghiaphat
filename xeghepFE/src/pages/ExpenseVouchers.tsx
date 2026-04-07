@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { compressImages, MAX_VOUCHER_IMAGES } from '@/utils/imageCompression';
+import { PaginationControls } from '@/components/PaginationControls';
 import { Plus, Download } from 'lucide-react';
 import { apiService } from '@/services/apiService';
 import {
@@ -194,13 +195,13 @@ const ExpenseVouchersPage: React.FC = () => {
     enabled: historyVoucherId != null,
   });
 
-  const driversQuery = useQuery({
+  const driversQuery = useQuery<any[], Error>({
     queryKey: ['drivers'],
     queryFn: getDrivers,
     enabled: isAuthenticated && (isAccountant || isAdmin),
   });
 
-  const driverAdvancesQuery = useQuery({
+  const driverAdvancesQuery = useQuery<DriverExpenseAdvance[], Error>({
     queryKey: ['driver-advances', driverStatusFilter, selectedDriverFilter],
     queryFn: () =>
       getDriverExpenseAdvances({
@@ -413,9 +414,9 @@ const ExpenseVouchersPage: React.FC = () => {
     },
   });
 
-  const driverAdvanceStatusMut = useMutation({
-    mutationFn: updateDriverExpenseAdvanceStatus,
-    onSuccess: () => {
+  const driverAdvanceStatusMut = useMutation<DriverExpenseAdvance, Error, { id: string; status: DriverExpenseStatus; actionUserId: string; note?: string; rejectionReason?: string }>({
+    mutationFn: (payload) => updateDriverExpenseAdvanceStatus(payload),
+    onSuccess: (updatedAdvance) => {
       toast({
         title: 'Đã cập nhật',
         description: 'Trạng thái phiếu ứng phí đã được cập nhật',
@@ -435,7 +436,7 @@ const ExpenseVouchersPage: React.FC = () => {
   });
 
   const autoCreateDriverAdvanceVoucherMut = useMutation<ExpenseVoucher, Error, CreateExpenseVoucherInput>({
-    mutationFn: createExpenseVoucher,
+    mutationFn: (input) => createExpenseVoucher(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['expense-vouchers'] });
       qc.invalidateQueries({ queryKey: ['expense-voucher-summary'] });
@@ -1167,33 +1168,18 @@ const ExpenseVouchersPage: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">
-                      Trang {((filters.page ?? 0) + 1)} /{' '}
-                      {Math.max(1, Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)))}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={(filters.page ?? 0) === 0}
-                        onClick={() => applyFilters({ page: Math.max(0, (filters.page ?? 0) - 1) })}
-                      >
-                        Trước
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          (filters.page ?? 0) >=
-                          Math.ceil((vouchersQuery.data?.total ?? 0) / (filters.size ?? 20)) - 1
-                        }
-                        onClick={() => applyFilters({ page: (filters.page ?? 0) + 1 })}
-                      >
-                        Sau
-                      </Button>
+                  {vouchersQuery.data && (
+                    <div className="pt-4 border-t">
+                      <PaginationControls
+                        currentPage={filters.page || 0}
+                        totalPages={vouchersQuery.data.totalPages}
+                        pageSize={filters.size || 20}
+                        totalItems={vouchersQuery.data.total}
+                        onPageChange={(page) => applyFilters({ page })}
+                        onPageSizeChange={(size) => applyFilters({ size, page: 0 })}
+                      />
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </CardContent>

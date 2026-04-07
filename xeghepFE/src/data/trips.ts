@@ -291,6 +291,20 @@ export const getTripGroups = async (date?: string): Promise<TripGroup[]> => {
   return response.content.map(mapTripGroupResponse);
 };
 
+export const getTripGroupsPaginated = async (
+  page: number = 0,
+  size: number = 20,
+  date?: string,
+  status?: string
+): Promise<{ groups: TripGroup[]; totalPages: number; totalElements: number }> => {
+  const response = await apiService.getTripGroups(status, date, page, size);
+  return {
+    groups: response.content.map(mapTripGroupResponse),
+    totalPages: response.pageable?.totalPages ?? response.totalPages ?? 0,
+    totalElements: response.pageable?.totalElements ?? response.totalElements ?? 0,
+  };
+};
+
 export const getTripGroupById = async (id: string): Promise<TripGroup | undefined> => {
   const numericId = Number(id);
   if (Number.isNaN(numericId)) {

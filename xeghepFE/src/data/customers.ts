@@ -58,10 +58,10 @@ export const getCustomersPaginated = async (page: number = 0, size: number = 20,
   const response = await apiService.searchCustomers(query, page, size);
   return {
     customers: response.content.map(mapCustomer),
-    totalPages: response.pageable.totalPages,
-    totalElements: response.pageable.totalElements,
-    currentPage: response.pageable.pageNumber,
-    pageSize: response.pageable.pageSize,
+    totalPages: response.pageable?.totalPages ?? response.totalPages ?? 0,
+    totalElements: response.pageable?.totalElements ?? response.totalElements ?? 0,
+    currentPage: response.pageable?.pageNumber ?? response.pageNumber ?? 0,
+    pageSize: response.pageable?.pageSize ?? response.pageSize ?? 20,
   };
 };
 

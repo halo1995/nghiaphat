@@ -32,6 +32,7 @@ import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
+import { PaginationControls } from '@/components/PaginationControls';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -44,6 +45,8 @@ const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   const { data: groups = [], isLoading } = useQuery<TripGroup[]>({
     queryKey: ['tripGroups', dateFilter],
@@ -151,18 +154,33 @@ const GroupTrips = () => {
         return false;
       }
 
-      switch (assignmentFilter) {
-        case 'vehicleAssigned':
-          return Boolean(group.vehicleId);
-        case 'driverAssigned':
-          return Boolean(group.driverId);
-        case 'unassigned':
-          return !group.vehicleId;
-        default:
-          return true;
-      }
+      const matchesAssignment = (() => {
+        switch (assignmentFilter) {
+          case 'vehicleAssigned':
+            return Boolean(group.vehicleId);
+          case 'driverAssigned':
+            return Boolean(group.driverId);
+          case 'unassigned':
+            return !group.vehicleId;
+          default:
+            return true;
+        }
+      })();
+
+      return matchesAssignment;
     });
   }, [groups, tripById, dateFilter, assignmentFilter]);
+
+  // Reset to first page when filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [dateFilter, assignmentFilter]);
+
+  const totalPages = Math.ceil(filteredGroups.length / pageSize);
+  const paginatedGroups = useMemo(() => {
+    const start = page * pageSize;
+    return filteredGroups.slice(start, start + pageSize);
+  }, [filteredGroups, page, pageSize]);
 
   useEffect(() => {
     if (selectedVehicleId === 'none') {
@@ -542,9 +560,11 @@ const GroupTrips = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredGroups.map((group, index) => {
-                const groupTrips = trips.filter((t) => group.tripIds.includes(t.id));
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {paginatedGroups.map((group, index) => {
+                const groupTrips = group.tripIds
+                  .map((id) => tripById.get(id))
+                  .filter((t): t is Trip => !!t);
                 
                 // Debug: Log if group has trips but groupTrips is empty
                 if (group.tripIds.length > 0 && groupTrips.length === 0) {
@@ -750,6 +770,26 @@ const GroupTrips = () => {
                 );
               })}
             </div>
+          )}
+
+          {/* Pagination */}
+          {filteredGroups.length > 0 && (
+            <Card className="mt-8 border shadow-sm">
+              <CardContent className="p-0">
+                <PaginationControls
+                  currentPage={page}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={filteredGroups.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(0);
+                  }}
+                  pageSizeOptions={[10, 20, 50]}
+                />
+              </CardContent>
+            </Card>
           )}
         </div>
       </main>
