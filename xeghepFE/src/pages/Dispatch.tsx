@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { getProvinces, getWards, WardOption } from '@/data/locations';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowRightLeft, Navigation, Clock } from 'lucide-react';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -40,6 +42,7 @@ const Dispatch = () => {
   const defaultDate = useMemo(() => getTodayLocalDate(), []);
   const [filterDate, setFilterDate] = useState<string>(defaultDate);
   const [filterTimeRange, setFilterTimeRange] = useState('all');
+  const [filterDirection, setFilterDirection] = useState<'all' | 'NB-HN' | 'HN-NB' | 'OTHER'>('all');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -100,6 +103,15 @@ const Dispatch = () => {
   // Filter trips based on criteria
   const filteredTrips = useMemo(() => {
     return confirmedTrips.filter(trip => {
+      // Direction detection (Ninh Bình: 37, Hà Nội: 01)
+      const isNBtoHN = trip.pickupProvinceCode === '37' && trip.dropoffProvinceCode === '01';
+      const isHNtoNB = trip.pickupProvinceCode === '01' && trip.dropoffProvinceCode === '37';
+      const tripDirection = isNBtoHN ? 'NB-HN' : (isHNtoNB ? 'HN-NB' : 'OTHER');
+
+      if (filterDirection !== 'all' && tripDirection !== filterDirection) {
+        return false;
+      }
+
       if (selectedPickupProvince) {
         if (trip.pickupProvinceCode !== selectedPickupProvince.code) {
           return false;
@@ -151,6 +163,11 @@ const Dispatch = () => {
       }
 
       return true;
+    }).sort((a, b) => {
+      // Sort by pickup time (ascending)
+      const timeA = a.pickupTime ? new Date(a.pickupTime).getTime() : 0;
+      const timeB = b.pickupTime ? new Date(b.pickupTime).getTime() : 0;
+      return timeA - timeB;
     });
   }, [
     confirmedTrips,
@@ -160,7 +177,28 @@ const Dispatch = () => {
     selectedDropoffWard,
     filterDate,
     filterTimeRange,
+    filterDirection,
   ]);
+
+  // Statistics for directions
+  const directionStats = useMemo(() => {
+    const stats = {
+      'NB-HN': { passengers: 0, count: 0 },
+      'HN-NB': { passengers: 0, count: 0 },
+      'OTHER': { passengers: 0, count: 0 },
+    };
+
+    confirmedTrips.forEach(trip => {
+      const isNBtoHN = trip.pickupProvinceCode === '37' && trip.dropoffProvinceCode === '01';
+      const isHNtoNB = trip.pickupProvinceCode === '01' && trip.dropoffProvinceCode === '37';
+      const direction = isNBtoHN ? 'NB-HN' : (isHNtoNB ? 'HN-NB' : 'OTHER');
+
+      stats[direction].passengers += trip.passengers || 0;
+      stats[direction].count += 1;
+    });
+
+    return stats;
+  }, [confirmedTrips]);
 
   const handleToggleTrip = (tripId: string) => {
     const trip = trips.find(t => t.id === tripId);
@@ -219,6 +257,7 @@ const Dispatch = () => {
     setFilterDropoffWard('all');
     setFilterDate(defaultDate);
     setFilterTimeRange('all');
+    setFilterDirection('all');
     setShowAdvancedFilters(false);
   };
 
@@ -228,7 +267,8 @@ const Dispatch = () => {
     filterDropoffProvince !== 'all' ||
     filterDropoffWard !== 'all' ||
     (filterDate && filterDate !== defaultDate) ||
-    filterTimeRange !== 'all';
+    filterTimeRange !== 'all' ||
+    filterDirection !== 'all';
 
   if (authLoading) {
     return (
@@ -291,23 +331,63 @@ const Dispatch = () => {
 
       <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Info Card */}
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <GitMerge className="text-blue-600 mt-1" size={24} />
+          {/* Statistics Bar */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none shadow-md">
+              <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-blue-900 mb-1">Hướng dẫn ghép chuyến</h3>
-                  <p className="text-sm text-blue-700">
-                    1. Sử dụng bộ lọc để tìm các chuyến cùng khu vực hoặc cùng thời gian<br />
-                    2. Chọn các chuyến phù hợp để ghép lại<br />
-                    3. Nhấn "Tạo Nhóm Chuyến" để ghép các chuyến<br />
-                    4. Sau đó vào "Nhóm Chuyến" để phân xe và tài xế
-                  </p>
+                  <p className="text-blue-100 text-xs font-medium uppercase tracking-wider">Ninh Bình → Hà Nội</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">{directionStats['NB-HN'].passengers}</span>
+                    <span className="text-blue-100 text-sm">khách / {directionStats['NB-HN'].count} chuyến</span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Navigation className="rotate-45" size={24} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-none shadow-md">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-xs font-medium uppercase tracking-wider">Hà Nội → Ninh Bình</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">{directionStats['HN-NB'].passengers}</span>
+                    <span className="text-purple-100 text-sm">khách / {directionStats['HN-NB'].count} chuyến</span>
+                  </div>
+                </div>
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Navigation className="rotate-[225deg]" size={24} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-gray-500 to-gray-600 text-white border-none shadow-md">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-gray-100 text-xs font-medium uppercase tracking-wider">Chiều khác</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold">{directionStats['OTHER'].passengers}</span>
+                    <span className="text-gray-100 text-sm">khách / {directionStats['OTHER'].count} chuyến</span>
+                  </div>
+                </div>
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <ArrowRightLeft size={24} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Direction Tabs */}
+          <Tabs value={filterDirection} onValueChange={(v) => setFilterDirection(v as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 h-12">
+              <TabsTrigger value="all" className="text-sm font-semibold">Tất cả ({confirmedTrips.length})</TabsTrigger>
+              <TabsTrigger value="NB-HN" className="text-sm font-semibold">NB → HN ({directionStats['NB-HN'].count})</TabsTrigger>
+              <TabsTrigger value="HN-NB" className="text-sm font-semibold">HN → NB ({directionStats['HN-NB'].count})</TabsTrigger>
+              <TabsTrigger value="OTHER" className="text-sm font-semibold">Khác ({directionStats['OTHER'].count})</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
           {/* Filters */}
           <Card>
@@ -573,8 +653,8 @@ const Dispatch = () => {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-4 text-sm">
-                            <span className="flex items-center gap-1 text-muted-foreground">
-                              <Calendar size={14} />
+                            <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-lg border border-blue-200">
+                              <Clock size={16} />
                               {pickupTimeLabel}
                             </span>
                             {isFullVehicle ? (
@@ -582,7 +662,7 @@ const Dispatch = () => {
                                 Thuê nguyên xe
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                              <span className="inline-flex items-center gap-1 rounded bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700 font-medium">
                                 <Users size={14} />
                                 {trip.passengers} người
                               </span>
