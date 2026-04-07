@@ -58,6 +58,12 @@ public class TripGroupServiceImpl implements TripGroupService {
         List<Long> tripIds = parseTripIds(req.getTripIds());
         validateSamePickupDate(tripIds);
 
+        // Fetch current trips to get up-to-date passengers and revenue
+        List<Trip> currentTrips = tripRepository.findAllById(tripIds);
+        int totalPassengers = currentTrips.stream().mapToInt(t -> t.getPassengers() != null ? t.getPassengers() : 0).sum();
+        double totalRevenue = currentTrips.stream().mapToDouble(t -> t.getPrice() != null ? t.getPrice().doubleValue() : 0.0).sum();
+        java.time.LocalDate pickupDate = calculatePickupDate(tripIds);
+
         TripGroup group = TripGroup.builder()
                 .name(req.getName())
                 .tripIds(req.getTripIds())
@@ -66,16 +72,16 @@ public class TripGroupServiceImpl implements TripGroupService {
                 .driverId(req.getDriverId())
                 .driverName(req.getDriverName())
                 .status(req.getStatus() != null ? req.getStatus() : TripGroup.GroupStatus.DANG_GHEP)
-                .totalPassengers(req.getTotalPassengers())
-                .totalRevenue(req.getTotalRevenue())
+                .totalPassengers(totalPassengers)
+                .totalRevenue(totalRevenue)
+                .pickupDate(pickupDate)
                 .build();
 
         group = tripGroupRepository.save(group);
 
         // Update trips to link to this group
         if (!tripIds.isEmpty()) {
-            List<Trip> trips = tripRepository.findAllById(tripIds);
-            for (Trip trip : trips) {
+            for (Trip trip : currentTrips) {
                 Trip.TripStatus previousStatus = trip.getStatus();
                 trip.setGroupId(group.getId().toString());
                 // Set status to DA_GHEP_CHUYEN if not already more advanced

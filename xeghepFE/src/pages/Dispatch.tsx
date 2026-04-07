@@ -68,7 +68,7 @@ const Dispatch = () => {
       });
 
       setSelectedTrips([]);
-      navigate('/group-trips');
+      navigate('/group-trips', { state: { date: filterDate } });
     },
   });
 

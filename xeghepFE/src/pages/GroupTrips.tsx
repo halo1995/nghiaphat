@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,8 @@ const getTodayLocalDate = () => {
 const GroupTrips = () => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [dateFilter, setDateFilter] = useState<string>(() => getTodayLocalDate());
+  const location = useLocation();
+  const [dateFilter, setDateFilter] = useState<string>(() => location.state?.date || getTodayLocalDate());
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
