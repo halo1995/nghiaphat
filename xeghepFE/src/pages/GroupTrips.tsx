@@ -27,7 +27,7 @@ import type { Driver } from '@/data/drivers';
 import { getDrivers } from '@/data/drivers';
 import type { Vehicle } from '@/data/vehicles';
 import { getVehicles } from '@/data/vehicles';
-import { Truck, Users, DollarSign, ArrowRight, GitMerge, Pencil, Loader2, AlertTriangle, Calendar, Clock } from 'lucide-react';
+import { Truck, Users, DollarSign, ArrowRight, GitMerge, Pencil, Loader2, AlertTriangle, Calendar, Clock, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +55,7 @@ const GroupTrips = () => {
     queryKey: ['tripGroups', dateFilter],
     queryFn: () => getTripGroups(dateFilter),
     enabled: isAuthenticated && !authLoading,
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Load trips with pickupDate matching the selected date
@@ -63,7 +64,8 @@ const GroupTrips = () => {
     queryKey: ['trips-for-groups', dateFilter],
     queryFn: () => getTrips(dateFilter), // Load trips for selected date
     enabled: isAuthenticated && !authLoading,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to reduce re-fetching
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes (except during operational hours)
+    refetchInterval: 10000, // Refresh every 10 seconds for real-time status updates
   });
 
   const { data: drivers = [] } = useQuery<Driver[]>({
@@ -814,7 +816,9 @@ const GroupTrips = () => {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium text-gray-800">{trip.customerName}</p>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${tripStatusColors[trip.status] || 'bg-gray-100 text-gray-700'}`}>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${tripStatusColors[trip.status] || 'bg-gray-100 text-gray-700'} ${['Đang đón', 'Đang đi'].includes(trip.status) ? 'animate-pulse' : ''}`}>
+                                      {trip.status === 'Đang đón' && <Truck size={10} />}
+                                      {trip.status === 'Đang đi' && <Play size={10} />}
                                       {trip.status}
                                     </span>
                                   </div>

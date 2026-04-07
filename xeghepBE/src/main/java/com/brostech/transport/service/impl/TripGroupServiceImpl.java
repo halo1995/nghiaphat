@@ -186,7 +186,9 @@ public class TripGroupServiceImpl implements TripGroupService {
                 trip.setDriverId(null);
                 trip.setVehicleName(null);
                 trip.setDriverName(null);
-                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || 
+                    trip.getStatus() == Trip.TripStatus.DA_PHAN_XE || 
+                    trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
                     trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
                 }
                 tripRepository.save(trip);
@@ -258,7 +260,9 @@ public class TripGroupServiceImpl implements TripGroupService {
                 trip.setDriverId(null);
                 trip.setVehicleName(null);
                 trip.setDriverName(null);
-                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+                if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || 
+                    trip.getStatus() == Trip.TripStatus.DA_PHAN_XE || 
+                    trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
                     trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
                 }
                 tripRepository.save(trip);
@@ -424,7 +428,9 @@ public class TripGroupServiceImpl implements TripGroupService {
         trip.setDriverId(null);
         trip.setVehicleName(null);
         trip.setDriverName(null);
-        if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
+        if (trip.getStatus() == Trip.TripStatus.DA_GHEP_CHUYEN || 
+            trip.getStatus() == Trip.TripStatus.DA_PHAN_XE || 
+            trip.getStatus() == Trip.TripStatus.DA_XAC_NHAN) {
             trip.setStatus(Trip.TripStatus.DA_XAC_NHAN);
         }
         tripRepository.save(trip);

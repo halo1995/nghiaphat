@@ -15,7 +15,7 @@ import { getProvinces, getWards, WardOption } from '@/data/locations';
 import { useAuth } from '@/contexts/AuthContext';
 import { DatePickerField } from '@/components/ui/date-picker-field';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRightLeft, Navigation, Clock } from 'lucide-react';
+import { ArrowRightLeft, Navigation, Clock, Truck, UserCheck, Play } from 'lucide-react';
 
 const getTodayLocalDate = () => {
   const now = new Date();
@@ -43,6 +43,7 @@ const Dispatch = () => {
   const [filterDate, setFilterDate] = useState<string>(defaultDate);
   const [filterTimeRange, setFilterTimeRange] = useState('all');
   const [filterDirection, setFilterDirection] = useState<'all' | 'NB-HN' | 'HN-NB' | 'OTHER'>('all');
+  const [filterActiveTab, setFilterActiveTab] = useState<'PLANNING' | 'OPERATION'>('PLANNING');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -53,6 +54,7 @@ const Dispatch = () => {
     queryKey: ['trips', filterDate],
     queryFn: () => getTrips(filterDate),
     enabled: isAuthenticated && !authLoading,
+    refetchInterval: 10000, // Refetch every 10 seconds for live updates
   });
 
   console.log('Dispatch - trips:', trips);
@@ -75,7 +77,12 @@ const Dispatch = () => {
     },
   });
 
-  const confirmedTrips = trips.filter(t => t.status === 'Đã xác nhận');
+  const confirmedTrips = trips.filter(t => 
+    t.status === 'Đã xác nhận' || 
+    t.status === 'Đang đón' || 
+    t.status === 'Đang đi' ||
+    t.status === 'Hoàn thành'
+  );
   console.log('Dispatch - confirmedTrips:', confirmedTrips);
 
   const provinceOptions = useMemo(() => getProvinces(), []);
@@ -110,6 +117,14 @@ const Dispatch = () => {
 
       if (filterDirection !== 'all' && tripDirection !== filterDirection) {
         return false;
+      }
+
+      if (filterActiveTab === 'OPERATION') {
+        // Show all active trips that are being picked up or on board
+        return ['Đang đón', 'Đang đi', 'Hoàn thành'].includes(trip.status);
+      } else {
+        // Planning mode: only show confirmed trips to be grouped
+        return trip.status === 'Đã xác nhận';
       }
 
       if (selectedPickupProvince) {
@@ -331,6 +346,14 @@ const Dispatch = () => {
 
       <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex justify-center mb-4">
+            <Tabs value={filterActiveTab} onValueChange={(v) => setFilterActiveTab(v as any)} className="w-[400px]">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="PLANNING">Ghép Chuyến</TabsTrigger>
+                <TabsTrigger value="OPERATION">Đang Vận Hành</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           {/* Statistics Bar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-none shadow-md">
@@ -630,8 +653,16 @@ const Dispatch = () => {
                                 </span>
                               )}
                             </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${isFullVehicle ? 'bg-green-100 text-green-700 border-green-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
-                              Đã xác nhận
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 ${
+                              trip.status === 'Đang đón' ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse' :
+                              trip.status === 'Đang đi' ? 'bg-blue-100 text-blue-700 border-blue-200 animate-pulse' :
+                              trip.status === 'Hoàn thành' ? 'bg-gray-100 text-gray-700 border-gray-200' :
+                              'bg-green-100 text-green-700 border-green-200'
+                            }`}>
+                              {trip.status === 'Đang đón' && <Truck size={14} />}
+                              {trip.status === 'Đang đi' && <Play size={14} />}
+                              {trip.status === 'Hoàn thành' && <UserCheck size={14} />}
+                              {trip.status}
                             </span>
                           </div>
 

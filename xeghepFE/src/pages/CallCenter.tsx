@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { getTrips, updateTrip, deleteTrip, type Trip } from '@/data/trips';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock, Wallet, MoreHorizontal, FileText, ArrowRight } from 'lucide-react';
+import { Search, Plus, Phone, CheckCircle, XCircle, MapPin, Users, Calendar as CalendarIcon, Clock, Wallet, MoreHorizontal, FileText, ArrowRight, Truck, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { getProvinces, getWards, type ProvinceOption, type WardOption } from '@/data/locations';
@@ -97,6 +97,7 @@ const CallCenter = () => {
     queryKey: ['trips', dateFilter],
     queryFn: () => getTrips(dateFilter),
     enabled: isAuthenticated && !authLoading,
+    refetchInterval: 10000, // Refresh every 10 seconds for real-time status updates
   });
 
   const customerAdvancesQuery = useQuery({
@@ -977,7 +978,10 @@ const CallCenter = () => {
                                   <Phone size={12} /> {trip.customerPhone}
                                 </a>
                               </div>
-                              <Badge variant="outline" className={`${statusColors[trip.status]} border-0`}>
+                              <Badge variant="outline" className={`${statusColors[trip.status]} border-0 font-bold flex items-center gap-1 ${['Đang đón', 'Đang đi'].includes(trip.status) ? 'animate-pulse' : ''}`}>
+                                {trip.status === 'Đang đón' && <Truck size={12} />}
+                                {trip.status === 'Đang đi' && <Play size={12} />}
+                                {trip.status === 'Hoàn thành' && <CheckCircle size={12} />}
                                 {trip.status}
                               </Badge>
                             </div>
